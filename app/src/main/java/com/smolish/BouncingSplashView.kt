@@ -166,7 +166,7 @@ class BouncingSplashView @JvmOverloads constructor(
         squash = (squash + squashVel * dt).coerceIn(-0.3f, 0.35f)
 
         // eyes trail the momentum: rising -> look up, falling -> look down
-        val maxEye = size * 0.14f
+        val maxEye = size * 0.1f
         val eyeTargetX = (vx / (2500 * dp) * size).coerceIn(-maxEye, maxEye)
         val eyeTargetY = if (grounded) 0f else (vy / (1600 * dp) * size * 0.5f).coerceIn(-maxEye, maxEye)
         val k = min(1f, 12f * dt)
