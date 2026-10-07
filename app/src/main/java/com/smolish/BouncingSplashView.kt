@@ -16,6 +16,7 @@ import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
 import kotlin.math.sin
+import kotlin.math.tan
 import kotlin.random.Random
 
 /**
@@ -194,22 +195,24 @@ class BouncingSplashView @JvmOverloads constructor(
             canvas.save()
             // shoving squeezes it down into the body's top line (white on white, so it just merges)
             canvas.scale(1f, 1f - armShove, 0f, BODY_TOP + 26f) // into the middle of the top line
-            // never let the arm stick out past the body's sides
-            canvas.clipRect(0f, -ICON_H, ICON_W, ICON_H)
-            if (armAngle > 0f) {
+            // tilt the arm with a vertical shear around the hinge instead of a rotation: the
+            // underside still lands exactly flat, but vertical edges stay vertical, so the arm's
+            // left side stays lined up with the body and its right end doesn't stick out
+            val t = tan(Math.toRadians(armAngle.toDouble())).toFloat()
+            if (t > 0f) {
                 // closing lifts the solid left part of the arm off the body, fill that space so
                 // the arm and body never come apart
-                val a = Math.toRadians(armAngle.toDouble())
-                val lx = (HINGE_X - HINGE_X * cos(a)).toFloat()
-                val ly = (BODY_TOP - HINGE_X * sin(a)).toFloat()
                 path.reset()
                 path.moveTo(0f, BODY_TOP + 1f)
                 path.lineTo(HINGE_X, BODY_TOP + 1f)
-                path.lineTo(lx, ly)
+                path.lineTo(HINGE_X, BODY_TOP) // top edge = exactly the arm's sheared underside
+                path.lineTo(0f, BODY_TOP - HINGE_X * t)
                 path.close()
                 canvas.drawPath(path, web)
             }
-            canvas.rotate(armAngle, HINGE_X, BODY_TOP)
+            canvas.translate(HINGE_X, BODY_TOP)
+            canvas.skew(0f, t)
+            canvas.translate(-HINGE_X, -BODY_TOP)
             canvas.drawBitmap(arm, 0f, 0f, armPaint)
             canvas.restore()
         }
@@ -334,6 +337,6 @@ class BouncingSplashView @JvmOverloads constructor(
         const val ICON_H = 512f
         const val BODY_TOP = 215f // where the body's top edge is; the arm is everything above
         const val HINGE_X = 235.3f // where the arm's underside meets the body's top edge
-        const val CLOSE_ANGLE = 16.8f // angle of the arm's underside, rotating by it lays it flush
+        const val CLOSE_ANGLE = 16.8f // angle of the arm's underside, shearing by it lays it flush
     }
 }
