@@ -52,6 +52,12 @@ class BouncingSplashView @JvmOverloads constructor(
     }
     private val eye = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE }
     private val armPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+    // fill + a little stroke so it overlaps the arm's edge and no seam shows between them
+    private val web = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.WHITE
+        style = Paint.Style.FILL_AND_STROKE
+        strokeWidth = 4f
+    }
     private val rect = RectF()
     private val path = Path()
     private val radii = FloatArray(8)
@@ -161,7 +167,9 @@ class BouncingSplashView @JvmOverloads constructor(
         // body: the icon's wide body (square top left where the arm joins) morphing into the square
         val sq = squareIcon * 0.25f
         val tl = lerp(0f, sq, m)
-        val tr = lerp(30f, sq, m)
+        // the top right corner goes square while the arm closes, so the flat arm end sits on it cleanly
+        val closed = (armAngle / CLOSE_ANGLE).coerceIn(0f, 1f)
+        val tr = lerp(30f * (1f - closed), sq, m)
         val bottom = lerp(110f, sq, m)
         val inset = sw / 2
         rect.set(cx - bw / 2 + inset, ICON_H - bh + inset, cx + bw / 2 - inset, ICON_H - inset)
@@ -180,12 +188,28 @@ class BouncingSplashView @JvmOverloads constructor(
         canvas.drawCircle(cx - edx, ey, r, eye)
         canvas.drawCircle(cx + edx, ey, r, eye)
 
-        // the clapper top, hinged at the left end of the body's top edge
+        // the clapper top. its underside is a straight line that meets the body's top edge at
+        // HINGE_X, so rotating around that point lays it exactly flush on the body
         if (armShove < 1f) {
             canvas.save()
             // shoving squeezes it down into the body's top line (white on white, so it just merges)
             canvas.scale(1f, 1f - armShove, 0f, BODY_TOP + 26f) // into the middle of the top line
-            canvas.rotate(armAngle, 0f, BODY_TOP)
+            // never let the arm stick out past the body's sides
+            canvas.clipRect(0f, -ICON_H, ICON_W, ICON_H)
+            if (armAngle > 0f) {
+                // closing lifts the solid left part of the arm off the body, fill that space so
+                // the arm and body never come apart
+                val a = Math.toRadians(armAngle.toDouble())
+                val lx = (HINGE_X - HINGE_X * cos(a)).toFloat()
+                val ly = (BODY_TOP - HINGE_X * sin(a)).toFloat()
+                path.reset()
+                path.moveTo(0f, BODY_TOP + 1f)
+                path.lineTo(HINGE_X, BODY_TOP + 1f)
+                path.lineTo(lx, ly)
+                path.close()
+                canvas.drawPath(path, web)
+            }
+            canvas.rotate(armAngle, HINGE_X, BODY_TOP)
             canvas.drawBitmap(arm, 0f, 0f, armPaint)
             canvas.restore()
         }
@@ -309,6 +333,7 @@ class BouncingSplashView @JvmOverloads constructor(
         const val ICON_W = 442f
         const val ICON_H = 512f
         const val BODY_TOP = 215f // where the body's top edge is; the arm is everything above
-        const val CLOSE_ANGLE = 17.7f // rotating the arm by this lays it flat on the body
+        const val HINGE_X = 235.3f // where the arm's underside meets the body's top edge
+        const val CLOSE_ANGLE = 16.8f // angle of the arm's underside, rotating by it lays it flush
     }
 }
