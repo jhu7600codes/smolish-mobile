@@ -52,7 +52,7 @@ class MainActivity : ComponentActivity() {
     companion object {
         private const val HOME = "https://smolish.com/"
         private const val HOST = "smolish.com"
-        private const val MIN_SPLASH_MS = 800L
+        private const val MIN_SPLASH_MS = 1500L // long enough for the intro + first landing
         private const val MAX_SPLASH_MS = 12_000L
 
         // paths that count as "the video feed" (no pull to refresh, no long press, back exits).
