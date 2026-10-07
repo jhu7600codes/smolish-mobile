@@ -1,16 +1,18 @@
 package com.smolish
 
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Path
-import android.graphics.drawable.ColorDrawable
 import android.graphics.RectF
 import android.util.AttributeSet
 import android.view.View
 import kotlin.math.abs
 import kotlin.math.cos
+import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
 import kotlin.math.sin
@@ -20,13 +22,15 @@ import kotlin.random.Random
  * The little rounded square with eyes that hops while the site loads.
  * Plain View + postInvalidateOnAnimation, so it runs at display refresh rate with no extra libs.
  *
+ * Intro (picks up exactly where the system splash icon was):
+ * the clapper top from the icon winds up, snaps shut, gets shoved down into the body,
+ * the wide body morphs into the square, and the square drops to the floor.
+ *
+ * Then:
  * - hops off an invisible floor line, bounces off the screen edges
  * - turns a quarter while falling, turns back upright on the next jump
  * - squash on landing / stretch in the air (damped spring, so it jiggles)
  * - the eyes lag behind the movement: up while rising, down while falling
- *
- * It starts with a short intro: the full clapperboard sits in the middle, the clapper top snaps
- * shut, gets shoved down into the body, and the plain square drops to the floor and starts hopping.
  */
 class BouncingSplashView @JvmOverloads constructor(
     context: Context, attrs: AttributeSet? = null,
@@ -45,26 +49,18 @@ class BouncingSplashView @JvmOverloads constructor(
     private val body = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.WHITE
         style = Paint.Style.STROKE
-        strokeWidth = stroke
     }
-    private val eye = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = body.color }
-    private val arm = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = body.color }
-    private val hole = Paint(Paint.ANTI_ALIAS_FLAG)
-    private val holePath = Path()
+    private val eye = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE }
+    private val armPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
     private val rect = RectF()
-
-    // intro: clapper top (the "arm") hinged at the body's top left corner
-    private val armH = size * 0.3f
-    private var introT = 0f
-    private var introDone = false
-    private var armAngle = OPEN_ANGLE
-    private var armShove = 0f // 0 = full arm, 1 = pushed all the way into the body
+    private val path = Path()
+    private val radii = FloatArray(8)
 
     private val gravity = 3200 * dp
     private val fallTurn = 90f // how far it turns while falling
 
     // x = center, y = bottom edge ("feet")
-    private var x = Float.NaN
+    private var x = 0f
     private var y = 0f
     private var vx = 0f
     private var vy = 0f
@@ -83,6 +79,19 @@ class BouncingSplashView @JvmOverloads constructor(
     private var eyeX = 0f
     private var eyeY = 0f
 
+    // --- intro, all in icon pixel units (the 442x512 clapperboard png)
+    // the clapper top cut from the icon (everything above the body, y < 215)
+    private val arm: Bitmap = BitmapFactory.decodeResource(resources, R.drawable.splash_arm)
+    // icon pixels -> screen pixels. the system splash draws the icon 288dp wide (no icon
+    // background), the clapper is 50/108 of that, so starting at this size makes the handoff seamless
+    private val k = 288f * 50f / 108f * dp / ICON_H
+    private val squareIcon = size / k // the final square, in icon pixels
+    private var introT = 0f
+    private var introDone = false
+    private var armAngle = 0f
+    private var armShove = 0f // 0 = arm on top, 1 = pushed all the way into the body
+    private var morph = 0f // 0 = icon body, 1 = the square
+
     private var lastFrame = 0L
     private var running = true
 
@@ -92,39 +101,38 @@ class BouncingSplashView @JvmOverloads constructor(
         running = false
     }
 
-    override fun onAttachedToWindow() {
-        super.onAttachedToWindow()
-        // holes in the clapper are "cut out" by painting the background color over them
-        hole.color = (background as? ColorDrawable)?.color ?: Color.BLACK
-    }
-
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
         if (width == 0) return
-        if (x.isNaN()) {
-            // start in the middle, where the system splash icon was
-            x = width / 2f
-            y = height / 2f + size / 2
-        }
         val now = System.nanoTime()
         // clamp dt so a hiccup doesn't teleport it through the floor
         val dt = if (lastFrame == 0L) 0f else min((now - lastFrame) / 1e9f, 1 / 30f)
         lastFrame = now
-        step(dt)
 
+        if (!introDone) {
+            stepIntro(dt)
+            drawIntro(canvas)
+        } else {
+            step(dt)
+            drawSquare(canvas)
+        }
+        if (running) postInvalidateOnAnimation()
+    }
+
+    private fun drawSquare(canvas: Canvas) {
         // stretch with speed in the air, keep the area roughly the same
         val airStretch = if (grounded) 0f else (abs(vy) / (5000 * dp)).coerceAtMost(0.15f)
         val sy = (1f - squash) * (1f + airStretch)
-        val sx = 1f / sy
 
         canvas.save()
         canvas.translate(x, y)
-        canvas.scale(sx, sy) // squash in screen space, pivot at the feet so it stays on the line
+        canvas.scale(1f / sy, sy) // squash in screen space, pivot at the feet so it stays on the line
         canvas.translate(0f, -size / 2)
         canvas.rotate(angle)
 
         val h = (size - stroke) / 2
         rect.set(-h, -h, h, h)
+        body.strokeWidth = stroke
         canvas.drawRoundRect(rect, corner - stroke / 2, corner - stroke / 2, body)
 
         // eyes move in screen space ("up" stays up), so undo the body rotation for the offset
@@ -133,36 +141,53 @@ class BouncingSplashView @JvmOverloads constructor(
         val ey = (eyeX * sin(rad) + eyeY * cos(rad)).toFloat()
         canvas.drawCircle(-eyeDx + ex, eyeDy + ey, eyeR, eye)
         canvas.drawCircle(eyeDx + ex, eyeDy + ey, eyeR, eye)
-        if (!introDone) drawArm(canvas)
         canvas.restore()
-
-        if (running) postInvalidateOnAnimation()
     }
 
-    /** The clapper top, in body coordinates (body centered on 0,0). */
-    private fun drawArm(canvas: Canvas) {
-        val s2 = size / 2
-        val keep = 1f - armShove
-        if (keep <= 0f) return
+    private fun drawIntro(canvas: Canvas) {
+        val m = morph
+        val bw = lerp(ICON_W, squareIcon, m)
+        val bh = lerp(ICON_H - BODY_TOP, squareIcon, m)
+        val sw = lerp(53f, squareIcon * 0.12f, m)
+        val cx = ICON_W / 2
+
         canvas.save()
-        canvas.rotate(armAngle, -s2, -s2) // hinge at the top left corner
-        canvas.scale(1f, keep, 0f, -s2 + stroke) // shoving squeezes it down into the body's top edge
-        val top = -s2 - armH
-        val bottom = -s2 + stroke // overlaps the body's top line so they look joined
-        rect.set(-s2, top, s2, bottom)
-        canvas.drawRoundRect(rect, corner, corner, arm)
-        // three slanted gaps like the stripes on the icon
-        canvas.clipRect(-s2 + stroke, top + stroke, s2 - stroke, -s2)
-        val slant = armH * 0.45f
-        for (fx in floatArrayOf(-0.32f, -0.03f, 0.26f)) {
-            val l = fx * size
-            holePath.reset()
-            holePath.moveTo(l, -s2)
-            holePath.lineTo(l + size * 0.15f, -s2)
-            holePath.lineTo(l + size * 0.15f + slant, top)
-            holePath.lineTo(l + slant, top)
-            holePath.close()
-            canvas.drawPath(holePath, hole)
+        // icon centered on screen like the system splash; squash pivots on the body's bottom
+        canvas.translate(width / 2f, height / 2f)
+        canvas.scale(k, k)
+        canvas.translate(-cx, -ICON_H / 2)
+        canvas.scale(1f / (1f - squash), 1f - squash, cx, ICON_H)
+
+        // body: the icon's wide body (square top left where the arm joins) morphing into the square
+        val sq = squareIcon * 0.25f
+        val tl = lerp(0f, sq, m)
+        val tr = lerp(30f, sq, m)
+        val bottom = lerp(110f, sq, m)
+        val inset = sw / 2
+        rect.set(cx - bw / 2 + inset, ICON_H - bh + inset, cx + bw / 2 - inset, ICON_H - inset)
+        radii[0] = max(0f, tl - inset); radii[1] = radii[0]
+        radii[2] = max(0f, tr - inset); radii[3] = radii[2]
+        radii[4] = max(0f, bottom - inset); radii[5] = radii[4]
+        radii[6] = radii[4]; radii[7] = radii[4]
+        path.reset()
+        path.addRoundRect(rect, radii, Path.Direction.CW)
+        body.strokeWidth = sw
+        canvas.drawPath(path, body)
+
+        val r = lerp(33.5f, squareIcon * 0.076f, m)
+        val edx = lerp(84f, squareIcon * 0.19f, m)
+        val ey = lerp(366f, ICON_H - squareIcon / 2 + squareIcon * 0.17f, m)
+        canvas.drawCircle(cx - edx, ey, r, eye)
+        canvas.drawCircle(cx + edx, ey, r, eye)
+
+        // the clapper top, hinged at the left end of the body's top edge
+        if (armShove < 1f) {
+            canvas.save()
+            // shoving squeezes it down into the body's top line (white on white, so it just merges)
+            canvas.scale(1f, 1f - armShove, 0f, BODY_TOP + 26f) // into the middle of the top line
+            canvas.rotate(armAngle, 0f, BODY_TOP)
+            canvas.drawBitmap(arm, 0f, 0f, armPaint)
+            canvas.restore()
         }
         canvas.restore()
     }
@@ -172,19 +197,25 @@ class BouncingSplashView @JvmOverloads constructor(
         introT += dt
         fun passed(t: Float) = before < t && introT >= t
         armAngle = when {
-            introT < 0.15f -> OPEN_ANGLE
+            introT < 0.15f -> 0f
             // open a bit more (wind up) ...
-            introT < 0.35f -> OPEN_ANGLE - 8f * ease((introT - 0.15f) / 0.2f)
-            // ... then snap shut, accelerating
-            introT < 0.47f -> (OPEN_ANGLE - 8f) * (1f - ((introT - 0.35f) / 0.12f).let { it * it })
-            else -> 0f
+            introT < 0.35f -> -6f * ease((introT - 0.15f) / 0.2f)
+            // ... then snap shut onto the body, accelerating
+            introT < 0.47f -> lerp(-6f, CLOSE_ANGLE, ((introT - 0.35f) / 0.12f).let { it * it })
+            else -> CLOSE_ANGLE
         }
-        if (passed(0.47f)) squashVel += 4f // clap
-        armShove = if (introT < 0.58f) 0f else ease(((introT - 0.58f) / 0.22f).coerceAtMost(1f))
-        if (passed(0.8f)) squashVel += 3f // arm merges into the body
-        if (introT >= 1.0f) {
-            // done, now it just falls from here
+        if (passed(0.47f)) squashVel += 3f // clap
+        armShove = if (introT < 0.56f) 0f else ease(((introT - 0.56f) / 0.2f).coerceAtMost(1f))
+        if (passed(0.76f)) squashVel += 2.5f // arm merges into the body
+        // only after the arm is fully merged, or its squished line would stick out of the shrinking body
+        morph = if (introT < 0.78f) 0f else smooth(((introT - 0.78f) / 0.3f).coerceAtMost(1f))
+        spring(dt, 0f)
+
+        if (introT >= 1.12f) {
+            // hand over to the physics from exactly where the morphed square is: it falls from here
             introDone = true
+            x = width / 2f
+            y = height / 2f + ICON_H / 2 * k
             grounded = false
             rising = false
             vy = 0f
@@ -192,15 +223,8 @@ class BouncingSplashView @JvmOverloads constructor(
         }
     }
 
-    private fun ease(t: Float) = 1f - (1f - t) * (1f - t)
-
     private fun step(dt: Float) {
         if (dt == 0f) return
-        if (!introDone) {
-            stepIntro(dt)
-            spring(dt, 0f)
-            return
-        }
         val left = size / 2 + 16 * dp
         val right = width - size / 2 - 16 * dp
 
@@ -250,9 +274,9 @@ class BouncingSplashView @JvmOverloads constructor(
         val maxEye = size * 0.1f
         val eyeTargetX = (vx / (2500 * dp) * size).coerceIn(-maxEye, maxEye)
         val eyeTargetY = if (grounded) 0f else (vy / (1600 * dp) * size * 0.5f).coerceIn(-maxEye, maxEye)
-        val k = min(1f, 12f * dt)
-        eyeX += (eyeTargetX - eyeX) * k
-        eyeY += (eyeTargetY - eyeY) * k
+        val e = min(1f, 12f * dt)
+        eyeX += (eyeTargetX - eyeX) * e
+        eyeY += (eyeTargetY - eyeY) * e
     }
 
     // damped spring, underdamped so it jiggles a bit
@@ -276,7 +300,15 @@ class BouncingSplashView @JvmOverloads constructor(
         squashVel -= 2.5f // push off: stretch upward
     }
 
+    private fun ease(t: Float) = 1f - (1f - t) * (1f - t)
+    private fun smooth(t: Float) = t * t * (3f - 2f * t)
+    private fun lerp(a: Float, b: Float, t: Float) = a + (b - a) * t
+
     private companion object {
-        const val OPEN_ANGLE = -20f
+        // the clapperboard png the icon is made from
+        const val ICON_W = 442f
+        const val ICON_H = 512f
+        const val BODY_TOP = 215f // where the body's top edge is; the arm is everything above
+        const val CLOSE_ANGLE = 17.7f // rotating the arm by this lays it flat on the body
     }
 }
