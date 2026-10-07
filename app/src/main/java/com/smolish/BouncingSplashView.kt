@@ -3,47 +3,74 @@ package com.smolish
 import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Paint
+import android.graphics.RectF
 import android.util.AttributeSet
 import android.view.View
 import androidx.core.content.ContextCompat
 import kotlin.math.abs
+import kotlin.math.cos
 import kotlin.math.min
+import kotlin.math.roundToInt
+import kotlin.math.sin
 import kotlin.random.Random
 
 /**
- * The little clapperboard that hops around while the site loads.
+ * The little rounded square with eyes that hops while the site loads.
  * Plain View + postInvalidateOnAnimation, so it runs at display refresh rate with no extra libs.
- * Physics: gravity, wall bounces, a damped spring for squash and stretch, random hops.
+ *
+ * - hops off an invisible floor line, bounces off the screen edges
+ * - turns a quarter while falling, turns back upright on the next jump
+ * - squash on landing / stretch in the air (damped spring, so it jiggles)
+ * - the eyes lag behind the movement: up while rising, down while falling
  */
 class BouncingSplashView @JvmOverloads constructor(
     context: Context, attrs: AttributeSet? = null,
 ) : View(context, attrs) {
 
     private val dp = resources.displayMetrics.density
-    private val logo = ContextCompat.getDrawable(context, R.drawable.splash_logo)!!
-    private val logoH = 88 * dp
-    private val logoW = logoH * logo.intrinsicWidth / logo.intrinsicHeight
-    private val shadow = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x55000000 }
+    private val size = 84 * dp
+
+    // proportions measured from the app icon's body so it looks like the same character
+    private val stroke = size * 0.12f
+    private val corner = size * 0.2f
+    private val eyeR = size * 0.076f
+    private val eyeDx = size * 0.19f
+
+    private val body = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = ContextCompat.getColor(context, R.color.brand)
+        style = Paint.Style.STROKE
+        strokeWidth = stroke
+    }
+    private val eye = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = body.color }
+    private val rect = RectF()
 
     private val gravity = 3200 * dp
+    private val fallTurn = 90f // how far it turns while falling
 
-    // x = center of the logo, y = its bottom edge ("feet")
+    // x = center, y = bottom edge ("feet")
     private var x = Float.NaN
     private var y = 0f
     private var vx = 0f
     private var vy = 0f
     private var grounded = false
+    private var rising = false // true from a jump until the top of the arc (landing rebounds don't count)
     private var restLeft = 0.4f
 
-    // squash > 0 = flattened, < 0 = stretched; driven by a spring so it wobbles back
+    private var angle = 0f
+    private var turnTo = fallTurn // where it turns to on the way down, picked per jump
+
+    // squash > 0 = flattened, < 0 = stretched
     private var squash = 0f
     private var squashVel = 0f
-    private var tilt = 0f
+
+    // eye offset in screen space, follows velocity with a delay
+    private var eyeX = 0f
+    private var eyeY = 0f
 
     private var lastFrame = 0L
     private var running = true
 
-    private val floor get() = height * 0.62f
+    private val floor get() = height * 0.62f // the invisible line
 
     fun stop() {
         running = false
@@ -57,27 +84,32 @@ class BouncingSplashView @JvmOverloads constructor(
             y = floor - 260 * dp
         }
         val now = System.nanoTime()
-        // clamp dt so a hiccup doesn't teleport the logo through the floor
+        // clamp dt so a hiccup doesn't teleport it through the floor
         val dt = if (lastFrame == 0L) 0f else min((now - lastFrame) / 1e9f, 1 / 30f)
         lastFrame = now
         step(dt)
 
-        // shadow shrinks the higher it jumps
-        val height01 = ((floor - y) / (300 * dp)).coerceIn(0f, 1f)
-        val sw = logoW * 0.45f * (1f - 0.6f * height01)
-        canvas.drawOval(x - sw, floor - 5 * dp, x + sw, floor + 5 * dp, shadow)
-
-        // stretch in the air depending on speed, keep area roughly constant
-        val airStretch = if (grounded) 0f else (abs(vy) / (5000 * dp)).coerceAtMost(0.18f)
+        // stretch with speed in the air, keep the area roughly the same
+        val airStretch = if (grounded) 0f else (abs(vy) / (5000 * dp)).coerceAtMost(0.15f)
         val sy = (1f - squash) * (1f + airStretch)
         val sx = 1f / sy
 
         canvas.save()
         canvas.translate(x, y)
-        canvas.rotate(tilt)
-        canvas.scale(sx, sy) // pivot at the feet, so squashing keeps it on the floor
-        logo.setBounds((-logoW / 2).toInt(), (-logoH).toInt(), (logoW / 2).toInt(), 0)
-        logo.draw(canvas)
+        canvas.scale(sx, sy) // squash in screen space, pivot at the feet so it stays on the line
+        canvas.translate(0f, -size / 2)
+        canvas.rotate(angle)
+
+        val h = (size - stroke) / 2
+        rect.set(-h, -h, h, h)
+        canvas.drawRoundRect(rect, corner - stroke / 2, corner - stroke / 2, body)
+
+        // eyes move in screen space ("up" stays up), so undo the body rotation for the offset
+        val rad = Math.toRadians(-angle.toDouble())
+        val ex = (eyeX * cos(rad) - eyeY * sin(rad)).toFloat()
+        val ey = (eyeX * sin(rad) + eyeY * cos(rad)).toFloat()
+        canvas.drawCircle(-eyeDx + ex, ey, eyeR, eye)
+        canvas.drawCircle(eyeDx + ex, ey, eyeR, eye)
         canvas.restore()
 
         if (running) postInvalidateOnAnimation()
@@ -85,8 +117,8 @@ class BouncingSplashView @JvmOverloads constructor(
 
     private fun step(dt: Float) {
         if (dt == 0f) return
-        val left = logoW / 2 + 16 * dp
-        val right = width - logoW / 2 - 16 * dp
+        val left = size / 2 + 16 * dp
+        val right = width - size / 2 - 16 * dp
 
         var squashTarget = 0f
         if (grounded) {
@@ -96,6 +128,7 @@ class BouncingSplashView @JvmOverloads constructor(
             if (restLeft <= 0f) hop(left, right)
         } else {
             vy += gravity * dt
+            if (vy >= 0) rising = false
         }
 
         x += vx * dt
@@ -118,23 +151,40 @@ class BouncingSplashView @JvmOverloads constructor(
             vx *= 0.6f
         }
 
-        // damped spring for squash, underdamped so it jiggles a bit
+        // rotation: back upright while rising, quarter turn while falling,
+        // and on the ground settle flat on whichever side is closest
+        val angleTarget = when {
+            grounded -> (angle / 90f).roundToInt() * 90f
+            rising -> 0f
+            else -> turnTo
+        }
+        angle += (angleTarget - angle) * min(1f, (if (grounded) 18f else 7f) * dt)
+
+        // damped spring, underdamped so it jiggles a bit
         val accel = -260f * (squash - squashTarget) - 13f * squashVel
         squashVel += accel * dt
-        squash = (squash + squashVel * dt).coerceIn(-0.3f, 0.42f)
+        squash = (squash + squashVel * dt).coerceIn(-0.3f, 0.35f)
 
-        val tiltTarget = if (grounded) 0f else (vx / (30 * dp)).coerceIn(-14f, 14f)
-        tilt += (tiltTarget - tilt) * min(1f, 8f * dt)
+        // eyes trail the momentum: rising -> look up, falling -> look down
+        val maxEye = size * 0.14f
+        val eyeTargetX = (vx / (2500 * dp) * size).coerceIn(-maxEye, maxEye)
+        val eyeTargetY = if (grounded) 0f else (vy / (1600 * dp) * size * 0.5f).coerceIn(-maxEye, maxEye)
+        val k = min(1f, 12f * dt)
+        eyeX += (eyeTargetX - eyeX) * k
+        eyeY += (eyeTargetY - eyeY) * k
     }
 
     private fun hop(left: Float, right: Float) {
         grounded = false
+        rising = true
         // mostly little jumps, sometimes a big one
         val big = Random.nextFloat() < 0.25f
         vy = -(if (big) 1350f else 650f + Random.nextFloat() * 400f) * dp
         // random direction, nudged back toward the middle near the edges
         val center = (x - left) / (right - left) - 0.5f
         vx = ((Random.nextFloat() - 0.5f) * 2f - center * 1.5f) * 420f * dp
+        // turn the way it's moving on the way down
+        turnTo = if (vx >= 0) fallTurn else -fallTurn
         squashVel -= 2.5f // push off: stretch upward
     }
 }
