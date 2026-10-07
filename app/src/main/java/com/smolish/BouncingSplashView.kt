@@ -32,7 +32,7 @@ class BouncingSplashView @JvmOverloads constructor(
 
     // proportions measured from the app icon's body so it looks like the same character
     private val stroke = size * 0.12f
-    private val corner = size * 0.2f
+    private val corner = size * 0.25f // outer corner radius, about 2x the line width like the icon
     private val eyeR = size * 0.076f
     private val eyeDx = size * 0.19f
     private val eyeDy = size * 0.17f // eyes sit low, same distance from the bottom as in the logo
