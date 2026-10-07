@@ -2,11 +2,11 @@ package com.smolish
 
 import android.content.Context
 import android.graphics.Canvas
+import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.RectF
 import android.util.AttributeSet
 import android.view.View
-import androidx.core.content.ContextCompat
 import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.min
@@ -37,7 +37,7 @@ class BouncingSplashView @JvmOverloads constructor(
     private val eyeDx = size * 0.19f
 
     private val body = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = ContextCompat.getColor(context, R.color.brand)
+        color = Color.WHITE
         style = Paint.Style.STROKE
         strokeWidth = stroke
     }
