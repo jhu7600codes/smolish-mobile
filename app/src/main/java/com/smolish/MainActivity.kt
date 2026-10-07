@@ -25,6 +25,7 @@ import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.FrameLayout
@@ -87,6 +88,7 @@ class MainActivity : ComponentActivity() {
 
     private var splashHidden = false
     private var loadFailed = false
+    private var onChallenge = false // cloudflare "verify your browser" page is showing
     @Volatile private var pageAtTop = true
     private var videoPlaying = false
 
@@ -169,8 +171,8 @@ class MainActivity : ComponentActivity() {
             // login buttons often use window.open popups, handled in onCreateWindow
             setSupportMultipleWindows(true)
             javaScriptCanOpenWindowsAutomatically = true
-            // keep the real chrome UA (cloudflare checks it), just tag it
-            userAgentString = "$userAgentString Smolish/1.0"
+            // user agent stays exactly the stock webview one: cloudflare compares it with what the
+            // browser really is (client hints, js features), and any extra token fails the check
         }
         CookieManager.getInstance().apply {
             setAcceptCookie(true)
@@ -192,7 +194,7 @@ class MainActivity : ComponentActivity() {
         web.setDownloadListener { url, userAgent, disposition, mime, _ ->
             when {
                 // blob: urls only live inside the page, so the page has to read them for us (see bridge.js)
-                url.startsWith("blob:") -> web.evaluateJavascript(
+                url.startsWith("blob:") && !onChallenge -> web.evaluateJavascript(
                     bridgeJs + "\nwindow.__smolishBlob(${JSONObject.quote(url)}, ${JSONObject.quote(mime.orEmpty())});", null
                 )
                 url.startsWith("data:") -> saveDataUrl(url, mime.orEmpty(), "")
@@ -242,20 +244,28 @@ class MainActivity : ComponentActivity() {
 
         override fun onPageStarted(view: WebView, url: String?, favicon: Bitmap?) {
             loadFailed = false
+            onChallenge = false
             pageAtTop = true
+        }
+
+        // cloudflare serves its challenge page with 403/503. leave that page completely alone,
+        // our injected script would look like tampering and make the check fail
+        override fun onReceivedHttpError(view: WebView, request: WebResourceRequest, response: WebResourceResponse) {
+            if (request.isForMainFrame && response.statusCode in setOf(403, 429, 503)) onChallenge = true
         }
 
         override fun onPageFinished(view: WebView, url: String?) {
             refresh.isRefreshing = false
             if (!loadFailed) {
                 errorView.isVisible = false
-                injectBridge()
+                if (!onChallenge) injectBridge()
             }
             hideSplash()
         }
 
         // client side navigation in next.js only changes history, not the page
         override fun doUpdateVisitedHistory(view: WebView, url: String?, isReload: Boolean) {
+            if (onChallenge) return
             pageAtTop = true
             web.evaluateJavascript("window.__smolishResetScroll && window.__smolishResetScroll()", null)
         }
