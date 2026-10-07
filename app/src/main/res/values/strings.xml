@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Smolish</string>
+    <string name="offline_title">Can\'t reach Smolish</string>
+    <string name="offline_body">Check your connection and try again.</string>
+    <string name="retry">Retry</string>
+    <string name="download_started">Downloading to Downloads/Smolish</string>
+    <string name="download_saved">Saved to Downloads/Smolish</string>
+    <string name="download_failed">Download failed</string>
+    <string name="no_app">No app can open this</string>
+    <string name="notif_title">Stay in the loop?</string>
+    <string name="notif_body">Smolish would like to show notifications, for example when a download finishes. You can change this anytime in settings.</string>
+    <string name="notif_yes">Sure</string>
+    <string name="notif_no">Not now</string>
+</resources>
