@@ -363,7 +363,7 @@ class MainActivity : ComponentActivity() {
         fun onPlayingChanged(playing: Boolean) = runOnUiThread { setVideoPlaying(playing) }
 
         @JavascriptInterface
-        fun onBarColors(top: String, bottom: String) = runOnUiThread { setBarColors(top, bottom) }
+        fun onBarColor(color: String) = runOnUiThread { setBarColor(color) }
 
         @JavascriptInterface
         fun onScrollTop(atTop: Boolean) {
@@ -374,17 +374,16 @@ class MainActivity : ComponentActivity() {
         fun saveBase64(dataUrl: String, mime: String, name: String) = runOnUiThread { saveDataUrl(dataUrl, mime, name) }
     }
 
-    /** Paints the status bar and gesture/nav bar strips like the site's top bar and bottom nav. */
-    private fun setBarColors(top: String, bottom: String) {
-        val fallback = ContextCompat.getColor(this, R.color.bg)
-        val topColor = runCatching { Color.parseColor(top) }.getOrDefault(fallback)
-        val bottomColor = runCatching { Color.parseColor(bottom) }.getOrDefault(fallback)
-        statusBg.setBackgroundColor(topColor)
-        navBg.setBackgroundColor(bottomColor)
+    /** Paints the status bar and gesture/nav bar strips with the site's bottom nav color. */
+    private fun setBarColor(css: String) {
+        val color = runCatching { Color.parseColor(css) }.getOrDefault(ContextCompat.getColor(this, R.color.bg))
+        statusBg.setBackgroundColor(color)
+        navBg.setBackgroundColor(color)
         // dark icons on light colors and the other way around
+        val light = Color.luminance(color) > 0.5f
         WindowCompat.getInsetsController(window, statusBg).apply {
-            isAppearanceLightStatusBars = Color.luminance(topColor) > 0.5f
-            isAppearanceLightNavigationBars = Color.luminance(bottomColor) > 0.5f
+            isAppearanceLightStatusBars = light
+            isAppearanceLightNavigationBars = light
         }
     }
 

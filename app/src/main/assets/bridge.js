@@ -30,8 +30,8 @@
   // the app calls this on client side navigation, new pages start at the top
   window.__smolishResetScroll = function () { atTop = true; };
 
-  // --- system bar colors: read the background color right under the status bar and right
-  // above the gesture bar, so the app can paint the bars to match the site's top bar / bottom nav.
+  // --- system bar colors: read the background color of the site's bottom nav (right above the
+  // gesture bar), the app paints both the status bar and the gesture bar with it.
   // a 1x1 canvas turns any css color (rgb, oklch, ...) into plain rgba numbers.
   var cv = document.createElement('canvas');
   cv.width = cv.height = 1;
@@ -53,10 +53,10 @@
     }
     return '';
   }
-  var lastBars = '';
+  var lastBar = null;
   function checkBars() {
-    var top = colorAt(1), bottom = colorAt(window.innerHeight - 1);
-    if (top + bottom !== lastBars) { lastBars = top + bottom; B.onBarColors(top, bottom); }
+    var c = colorAt(window.innerHeight - 1);
+    if (c !== lastBar) { lastBar = c; B.onBarColor(c); }
   }
   checkBars();
   setInterval(checkBars, 700); // cheap, and catches page changes, modals and theme switches

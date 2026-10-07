@@ -79,7 +79,7 @@
             android:visibility="gone" />
     </FrameLayout>
 
-    <!-- painted with the site's top bar / bottom nav colors, sized to the system bars -->
+    <!-- both painted with the site's bottom nav color, sized to the system bars -->
     <View
         android:id="@+id/status_bg"
         android:layout_width="match_parent"
