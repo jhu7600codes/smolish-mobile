@@ -69,7 +69,30 @@
                 android:text="@string/retry"
                 android:textColor="@android:color/white" />
         </LinearLayout>
+
+        <!-- login popups (window.open) get their own webview in here -->
+        <FrameLayout
+            android:id="@+id/popup_host"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="@color/bg"
+            android:visibility="gone" />
     </FrameLayout>
+
+    <!-- painted with the site's top bar / bottom nav colors, sized to the system bars -->
+    <View
+        android:id="@+id/status_bg"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_gravity="top"
+        android:background="@color/bg" />
+
+    <View
+        android:id="@+id/nav_bg"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_gravity="bottom"
+        android:background="@color/bg" />
 
     <!-- fullscreen <video> elements get placed in here, see onShowCustomView -->
     <FrameLayout

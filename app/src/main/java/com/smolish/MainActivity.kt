@@ -57,6 +57,19 @@ class MainActivity : ComponentActivity() {
         // paths that count as "the video feed" (no pull to refresh, no long press, back exits).
         // adjust if the site moves its feed somewhere else.
         private val FEED_PATHS = setOf("", "/", "/feed", "/foryou", "/for-you", "/following")
+
+        // login providers that stay inside the app (host to path prefix). everything else
+        // outside smolish.com still opens in the browser.
+        private val AUTH_PAGES = listOf(
+            "accounts.google.com" to "", "accounts.youtube.com" to "",
+            "appleid.apple.com" to "",
+            "discord.com" to "/oauth2", "discord.com" to "/login",
+            "github.com" to "/login", "github.com" to "/sessions",
+            "x.com" to "/i/oauth2", "twitter.com" to "/i/oauth2", "api.twitter.com" to "/oauth",
+            "www.facebook.com" to "/dialog/oauth", "m.facebook.com" to "",
+            "challenges.cloudflare.com" to "",
+        )
+        private val AUTH_HOST_SUFFIXES = listOf(".auth0.com", ".clerk.accounts.dev", ".supabase.co", ".firebaseapp.com")
     }
 
     private lateinit var web: WebView
@@ -64,6 +77,10 @@ class MainActivity : ComponentActivity() {
     private lateinit var errorView: View
     private lateinit var fullscreen: FrameLayout
     private lateinit var splash: BouncingSplashView
+    private lateinit var popupHost: FrameLayout
+    private lateinit var statusBg: View
+    private lateinit var navBg: View
+    private var popup: WebView? = null
 
     private val startedAt = SystemClock.uptimeMillis()
     private val bridgeJs by lazy { assets.open("bridge.js").bufferedReader().use { it.readText() } }
@@ -108,12 +125,21 @@ class MainActivity : ComponentActivity() {
         errorView = findViewById(R.id.error)
         fullscreen = findViewById(R.id.fullscreen)
         splash = findViewById(R.id.splash)
+        popupHost = findViewById(R.id.popup_host)
+        statusBg = findViewById(R.id.status_bg)
+        navBg = findViewById(R.id.nav_bg)
+        if (Build.VERSION.SDK_INT >= 29) window.isNavigationBarContrastEnforced = false // no grey scrim over our nav color
 
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.content)) { v, insets ->
             val bars = insets.getInsets(
                 WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout() or WindowInsetsCompat.Type.ime()
             )
             v.setPadding(bars.left, bars.top, bars.right, bars.bottom)
+            // the colored strips behind the status bar and the gesture/nav bar
+            statusBg.layoutParams.height = bars.top
+            navBg.layoutParams.height = insets.getInsets(WindowInsetsCompat.Type.navigationBars()).bottom
+            statusBg.requestLayout()
+            navBg.requestLayout()
             WindowInsetsCompat.CONSUMED
         }
 
@@ -128,10 +154,11 @@ class MainActivity : ComponentActivity() {
         splash.postDelayed({ hideSplash() }, MAX_SPLASH_MS) // never get stuck on the splash
     }
 
+    /** Shared by the main webview and login popups. */
     @SuppressLint("SetJavaScriptEnabled")
-    private fun setupWebView() {
-        web.setBackgroundColor(ContextCompat.getColor(this, R.color.bg))
-        with(web.settings) {
+    private fun applySettings(w: WebView) {
+        w.setBackgroundColor(ContextCompat.getColor(this, R.color.bg))
+        with(w.settings) {
             javaScriptEnabled = true
             domStorageEnabled = true
             mediaPlaybackRequiresUserGesture = false
@@ -139,13 +166,20 @@ class MainActivity : ComponentActivity() {
             builtInZoomControls = false
             displayZoomControls = false
             allowFileAccess = false
+            // login buttons often use window.open popups, handled in onCreateWindow
+            setSupportMultipleWindows(true)
+            javaScriptCanOpenWindowsAutomatically = true
             // keep the real chrome UA (cloudflare checks it), just tag it
             userAgentString = "$userAgentString Smolish/1.0"
         }
         CookieManager.getInstance().apply {
             setAcceptCookie(true)
-            setAcceptThirdPartyCookies(web, true)
+            setAcceptThirdPartyCookies(w, true)
         }
+    }
+
+    private fun setupWebView() {
+        applySettings(web)
         web.overScrollMode = View.OVER_SCROLL_NEVER
         web.isHapticFeedbackEnabled = false
         // consuming the long press on the feed stops the text selection / copy menu
@@ -186,14 +220,22 @@ class MainActivity : ComponentActivity() {
         return isOurHost(uri.host) && (uri.path ?: "").trimEnd('/') in FEED_PATHS.map { it.trimEnd('/') }
     }
 
+    private fun isAuthPage(uri: Uri): Boolean {
+        val host = uri.host ?: return false
+        val path = uri.path ?: ""
+        return AUTH_PAGES.any { (h, prefix) -> host == h && path.startsWith(prefix) } ||
+            AUTH_HOST_SUFFIXES.any { host.endsWith(it) }
+    }
+
+    private fun isHttp(uri: Uri) = uri.scheme == "http" || uri.scheme == "https"
+
     private fun injectBridge() = web.evaluateJavascript(bridgeJs, null)
 
     private inner class Client : WebViewClient() {
         override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
             val uri = request.url
-            val http = uri.scheme == "http" || uri.scheme == "https"
             if (!request.isForMainFrame) return false // iframes (captcha, embeds) load as usual
-            if (http && isOurHost(uri.host)) return false
+            if (isHttp(uri) && (isOurHost(uri.host) || isAuthPage(uri))) return false
             openExternal(uri)
             return true
         }
@@ -248,6 +290,24 @@ class MainActivity : ComponentActivity() {
 
         override fun onHideCustomView() = exitFullscreen()
 
+        // window.open (e.g. "sign in with ..." popups): give the page a real second webview on top,
+        // so the popup keeps window.opener and can post the login result back and close itself
+        override fun onCreateWindow(view: WebView, isDialog: Boolean, isUserGesture: Boolean, resultMsg: android.os.Message): Boolean {
+            closePopup()
+            val child = WebView(this@MainActivity)
+            applySettings(child)
+            child.webViewClient = PopupClient()
+            child.webChromeClient = object : WebChromeClient() {
+                override fun onCloseWindow(window: WebView) = closePopup()
+            }
+            popupHost.addView(child, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+            popupHost.isVisible = true
+            popup = child
+            (resultMsg.obj as WebView.WebViewTransport).webView = child
+            resultMsg.sendToTarget()
+            return true
+        }
+
         // without this the webview draws a grey play icon placeholder before videos start
         override fun getDefaultVideoPoster(): Bitmap = Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888)
 
@@ -270,10 +330,40 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /** Popups only show login pages and smolish itself; other links (target=_blank etc) go to the browser. */
+    private inner class PopupClient : WebViewClient() {
+        override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
+            val uri = request.url
+            if (!request.isForMainFrame || (isHttp(uri) && (isOurHost(uri.host) || isAuthPage(uri)))) return false
+            openExternal(uri)
+            return true
+        }
+
+        // the very first load of a popup doesn't go through shouldOverrideUrlLoading
+        override fun onPageStarted(view: WebView, url: String?, favicon: Bitmap?) {
+            val uri = Uri.parse(url ?: return)
+            if (url == "about:blank" || (isHttp(uri) && (isOurHost(uri.host) || isAuthPage(uri)))) return
+            view.stopLoading()
+            openExternal(uri)
+            closePopup()
+        }
+    }
+
+    private fun closePopup() {
+        val p = popup ?: return
+        popup = null
+        popupHost.removeView(p)
+        popupHost.isVisible = false
+        p.destroy()
+    }
+
     /** Called from bridge.js. These run on a background "JavaBridge" thread, not the UI thread. */
     private inner class Bridge {
         @JavascriptInterface
         fun onPlayingChanged(playing: Boolean) = runOnUiThread { setVideoPlaying(playing) }
+
+        @JavascriptInterface
+        fun onBarColors(top: String, bottom: String) = runOnUiThread { setBarColors(top, bottom) }
 
         @JavascriptInterface
         fun onScrollTop(atTop: Boolean) {
@@ -282,6 +372,20 @@ class MainActivity : ComponentActivity() {
 
         @JavascriptInterface
         fun saveBase64(dataUrl: String, mime: String, name: String) = runOnUiThread { saveDataUrl(dataUrl, mime, name) }
+    }
+
+    /** Paints the status bar and gesture/nav bar strips like the site's top bar and bottom nav. */
+    private fun setBarColors(top: String, bottom: String) {
+        val fallback = ContextCompat.getColor(this, R.color.bg)
+        val topColor = runCatching { Color.parseColor(top) }.getOrDefault(fallback)
+        val bottomColor = runCatching { Color.parseColor(bottom) }.getOrDefault(fallback)
+        statusBg.setBackgroundColor(topColor)
+        navBg.setBackgroundColor(bottomColor)
+        // dark icons on light colors and the other way around
+        WindowCompat.getInsetsController(window, statusBg).apply {
+            isAppearanceLightStatusBars = Color.luminance(topColor) > 0.5f
+            isAppearanceLightNavigationBars = Color.luminance(bottomColor) > 0.5f
+        }
     }
 
     private fun saveDataUrl(dataUrl: String, mime: String, name: String) {
@@ -350,6 +454,7 @@ class MainActivity : ComponentActivity() {
         override fun handleOnBackPressed() {
             when {
                 customView != null -> exitFullscreen()
+                popup != null -> if (popup!!.canGoBack()) popup!!.goBack() else closePopup()
                 isFeed(web.url) && !errorView.isVisible -> finish()
                 web.canGoBack() -> web.goBack()
                 else -> web.loadUrl(HOME)
@@ -433,6 +538,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onDestroy() {
         fileCallback?.onReceiveValue(null)
+        closePopup()
         web.destroy()
         super.onDestroy()
     }

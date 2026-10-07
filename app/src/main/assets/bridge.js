@@ -30,6 +30,37 @@
   // the app calls this on client side navigation, new pages start at the top
   window.__smolishResetScroll = function () { atTop = true; };
 
+  // --- system bar colors: read the background color right under the status bar and right
+  // above the gesture bar, so the app can paint the bars to match the site's top bar / bottom nav.
+  // a 1x1 canvas turns any css color (rgb, oklch, ...) into plain rgba numbers.
+  var cv = document.createElement('canvas');
+  cv.width = cv.height = 1;
+  var cx = cv.getContext('2d', { willReadFrequently: true });
+  function toHex(css) {
+    cx.clearRect(0, 0, 1, 1);
+    cx.fillStyle = 'rgba(0,0,0,0)';
+    cx.fillStyle = css;
+    cx.fillRect(0, 0, 1, 1);
+    var d = cx.getImageData(0, 0, 1, 1).data;
+    if (d[3] < 128) return ''; // (mostly) transparent, look at the parent instead
+    return '#' + [d[0], d[1], d[2]].map(function (v) { return (v < 16 ? '0' : '') + v.toString(16); }).join('');
+  }
+  function colorAt(y) {
+    var el = document.elementFromPoint(window.innerWidth / 2, y);
+    for (; el; el = el.parentElement) {
+      var c = toHex(getComputedStyle(el).backgroundColor);
+      if (c) return c;
+    }
+    return '';
+  }
+  var lastBars = '';
+  function checkBars() {
+    var top = colorAt(1), bottom = colorAt(window.innerHeight - 1);
+    if (top + bottom !== lastBars) { lastBars = top + bottom; B.onBarColors(top, bottom); }
+  }
+  checkBars();
+  setInterval(checkBars, 700); // cheap, and catches page changes, modals and theme switches
+
   // --- blob downloads.
   // a blob: url only exists inside this page, so DownloadManager can't fetch it.
   // instead we read the blob here, turn it into a base64 data url and hand that to native code,
