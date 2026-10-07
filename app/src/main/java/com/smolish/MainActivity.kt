@@ -183,10 +183,10 @@ class MainActivity : ComponentActivity() {
     private fun setupWebView() {
         applySettings(web)
         web.overScrollMode = View.OVER_SCROLL_NEVER
-        // keep the renderer process at foreground priority and pre-render tiles just outside the
-        // screen, so swiping to the next video doesn't show half drawn content
+        // keep the renderer process at foreground priority so it doesn't get throttled.
+        // (no offscreenPreRaster: on phones like the pixel 3a the extra gpu memory starved
+        // video/audio decoding and made audio cut out or stutter after scrolling)
         web.setRendererPriorityPolicy(WebView.RENDERER_PRIORITY_IMPORTANT, true)
-        web.settings.offscreenPreRaster = true
         web.isHapticFeedbackEnabled = false
         // consuming the long press on the feed stops the text selection / copy menu
         web.setOnLongClickListener { onFeed }
