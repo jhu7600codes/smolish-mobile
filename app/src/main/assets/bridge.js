@@ -27,23 +27,32 @@
     var now = top <= 0;
     if (now !== atTop) { atTop = now; B.onScrollTop(now); }
   }, { capture: true, passive: true });
-  // the app calls this on client side navigation, new pages start at the top
-  window.__smolishResetScroll = function () { atTop = true; };
 
   // --- system bar colors: read the background color of the site's bottom nav (right above the
   // gesture bar), the app paints both the status bar and the gesture bar with it.
-  // a 1x1 canvas turns any css color (rgb, oklch, ...) into plain rgba numbers.
-  var cv = document.createElement('canvas');
-  cv.width = cv.height = 1;
-  var cx = cv.getContext('2d', { willReadFrequently: true });
+  // only runs when something changed (load, navigation, scroll stop, resize), never on a timer,
+  // so it costs nothing while swiping through videos.
+  var cv, cx;
+  function hex(r, g, b) {
+    return '#' + [r, g, b].map(function (v) { v = Math.round(v); return (v < 16 ? '0' : '') + v.toString(16); }).join('');
+  }
   function toHex(css) {
+    // fast path, computed colors are almost always rgb()/rgba()
+    var m = /^rgba?\(([\d.]+)[, ]+([\d.]+)[, ]+([\d.]+)(?:[,\/ ]+([\d.]+))?\)$/.exec(css);
+    if (m) return m[4] !== undefined && +m[4] < 0.5 ? '' : hex(+m[1], +m[2], +m[3]);
+    // anything else (oklch, color(...)): let a 1x1 canvas convert it
+    if (!cv) {
+      cv = document.createElement('canvas');
+      cv.width = cv.height = 1;
+      cx = cv.getContext('2d', { willReadFrequently: true });
+    }
     cx.clearRect(0, 0, 1, 1);
     cx.fillStyle = 'rgba(0,0,0,0)';
     cx.fillStyle = css;
     cx.fillRect(0, 0, 1, 1);
     var d = cx.getImageData(0, 0, 1, 1).data;
     if (d[3] < 128) return ''; // (mostly) transparent, look at the parent instead
-    return '#' + [d[0], d[1], d[2]].map(function (v) { return (v < 16 ? '0' : '') + v.toString(16); }).join('');
+    return hex(d[0], d[1], d[2]);
   }
   function colorAt(y) {
     var el = document.elementFromPoint(window.innerWidth / 2, y);
@@ -58,8 +67,21 @@
     var c = colorAt(window.innerHeight - 1);
     if (c !== lastBar) { lastBar = c; B.onBarColor(c); }
   }
+  var barTimer = 0;
+  function scheduleBars(delay) {
+    clearTimeout(barTimer);
+    barTimer = setTimeout(checkBars, delay);
+  }
   checkBars();
-  setInterval(checkBars, 700); // cheap, and catches page changes, modals and theme switches
+  scheduleBars(1500); // again once late styles / hydration settled
+  window.addEventListener('resize', function () { scheduleBars(300); });
+  document.addEventListener('scroll', function () { scheduleBars(400); }, { capture: true, passive: true });
+
+  // the app calls this on client side navigation: new page starts at the top, maybe new colors
+  window.__smolishOnNav = function () {
+    atTop = true;
+    scheduleBars(600);
+  };
 
   // --- blob downloads.
   // a blob: url only exists inside this page, so DownloadManager can't fetch it.

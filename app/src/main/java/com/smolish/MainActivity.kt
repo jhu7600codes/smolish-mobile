@@ -57,7 +57,7 @@ class MainActivity : ComponentActivity() {
 
         // paths that count as "the video feed" (no pull to refresh, no long press, back exits).
         // adjust if the site moves its feed somewhere else.
-        private val FEED_PATHS = setOf("", "/", "/feed", "/foryou", "/for-you", "/following")
+        private val FEED_PATHS = setOf("", "/feed", "/foryou", "/for-you", "/following")
 
         // login providers that stay inside the app (host to path prefix). everything else
         // outside smolish.com still opens in the browser.
@@ -90,6 +90,8 @@ class MainActivity : ComponentActivity() {
     private var loadFailed = false
     private var onChallenge = false // cloudflare "verify your browser" page is showing
     @Volatile private var pageAtTop = true
+    // cached because the refresh layout asks on every touch move
+    private var onFeed = true
     private var videoPlaying = false
 
     private var customView: View? = null
@@ -138,10 +140,8 @@ class MainActivity : ComponentActivity() {
             )
             v.setPadding(bars.left, bars.top, bars.right, bars.bottom)
             // the colored strips behind the status bar and the gesture/nav bar
-            statusBg.layoutParams.height = bars.top
-            navBg.layoutParams.height = insets.getInsets(WindowInsetsCompat.Type.navigationBars()).bottom
-            statusBg.requestLayout()
-            navBg.requestLayout()
+            setHeight(statusBg, bars.top)
+            setHeight(navBg, insets.getInsets(WindowInsetsCompat.Type.navigationBars()).bottom)
             WindowInsetsCompat.CONSUMED
         }
 
@@ -183,9 +183,13 @@ class MainActivity : ComponentActivity() {
     private fun setupWebView() {
         applySettings(web)
         web.overScrollMode = View.OVER_SCROLL_NEVER
+        // keep the renderer process at foreground priority and pre-render tiles just outside the
+        // screen, so swiping to the next video doesn't show half drawn content
+        web.setRendererPriorityPolicy(WebView.RENDERER_PRIORITY_IMPORTANT, true)
+        web.settings.offscreenPreRaster = true
         web.isHapticFeedbackEnabled = false
         // consuming the long press on the feed stops the text selection / copy menu
-        web.setOnLongClickListener { isFeed(web.url) }
+        web.setOnLongClickListener { onFeed }
 
         web.addJavascriptInterface(Bridge(), "SmolishBridge")
         web.webViewClient = Client()
@@ -211,7 +215,7 @@ class MainActivity : ComponentActivity() {
         refresh.setColorSchemeColors(ContextCompat.getColor(this, R.color.brand))
         refresh.setProgressBackgroundColorSchemeColor(ContextCompat.getColor(this, R.color.bg))
         // returning true means "the child can still scroll up", which blocks the refresh gesture
-        refresh.setOnChildScrollUpCallback { _, _ -> isFeed(web.url) || web.scrollY > 0 || !pageAtTop }
+        refresh.setOnChildScrollUpCallback { _, _ -> onFeed || web.scrollY > 0 || !pageAtTop }
         refresh.setOnRefreshListener { web.reload() }
     }
 
@@ -219,7 +223,7 @@ class MainActivity : ComponentActivity() {
 
     private fun isFeed(url: String?): Boolean {
         val uri = url?.let(Uri::parse) ?: return true
-        return isOurHost(uri.host) && (uri.path ?: "").trimEnd('/') in FEED_PATHS.map { it.trimEnd('/') }
+        return isOurHost(uri.host) && (uri.path ?: "").trimEnd('/') in FEED_PATHS
     }
 
     private fun isAuthPage(uri: Uri): Boolean {
@@ -246,6 +250,7 @@ class MainActivity : ComponentActivity() {
             loadFailed = false
             onChallenge = false
             pageAtTop = true
+            onFeed = isFeed(url)
         }
 
         // cloudflare serves its challenge page with 403/503. leave that page completely alone,
@@ -267,7 +272,8 @@ class MainActivity : ComponentActivity() {
         override fun doUpdateVisitedHistory(view: WebView, url: String?, isReload: Boolean) {
             if (onChallenge) return
             pageAtTop = true
-            web.evaluateJavascript("window.__smolishResetScroll && window.__smolishResetScroll()", null)
+            onFeed = isFeed(url)
+            web.evaluateJavascript("window.__smolishOnNav && window.__smolishOnNav()", null)
         }
 
         override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {
@@ -464,7 +470,7 @@ class MainActivity : ComponentActivity() {
             when {
                 customView != null -> exitFullscreen()
                 popup != null -> if (popup!!.canGoBack()) popup!!.goBack() else closePopup()
-                isFeed(web.url) && !errorView.isVisible -> finish()
+                onFeed && !errorView.isVisible -> finish()
                 web.canGoBack() -> web.goBack()
                 else -> web.loadUrl(HOME)
             }
@@ -550,6 +556,12 @@ class MainActivity : ComponentActivity() {
         closePopup()
         web.destroy()
         super.onDestroy()
+    }
+
+    private fun setHeight(v: View, h: Int) {
+        if (v.layoutParams.height == h) return
+        v.layoutParams.height = h
+        v.requestLayout()
     }
 
     private fun toast(res: Int) = Toast.makeText(this, res, Toast.LENGTH_SHORT).show()

@@ -19,6 +19,9 @@ android {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
+            // signed with the debug key so the faster release apk installs over the debug one.
+            // swap in a real keystore before publishing anywhere.
+            signingConfig = signingConfigs.getByName("debug")
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
