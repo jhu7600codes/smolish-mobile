@@ -35,6 +35,7 @@ class BouncingSplashView @JvmOverloads constructor(
     private val corner = size * 0.2f
     private val eyeR = size * 0.076f
     private val eyeDx = size * 0.19f
+    private val eyeDy = size * 0.17f // eyes sit low, same distance from the bottom as in the logo
 
     private val body = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.WHITE
@@ -108,8 +109,8 @@ class BouncingSplashView @JvmOverloads constructor(
         val rad = Math.toRadians(-angle.toDouble())
         val ex = (eyeX * cos(rad) - eyeY * sin(rad)).toFloat()
         val ey = (eyeX * sin(rad) + eyeY * cos(rad)).toFloat()
-        canvas.drawCircle(-eyeDx + ex, ey, eyeR, eye)
-        canvas.drawCircle(eyeDx + ex, ey, eyeR, eye)
+        canvas.drawCircle(-eyeDx + ex, eyeDy + ey, eyeR, eye)
+        canvas.drawCircle(eyeDx + ex, eyeDy + ey, eyeR, eye)
         canvas.restore()
 
         if (running) postInvalidateOnAnimation()
