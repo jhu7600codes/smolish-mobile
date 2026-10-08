@@ -168,9 +168,7 @@ class BouncingSplashView @JvmOverloads constructor(
         // body: the icon's wide body (square top left where the arm joins) morphing into the square
         val sq = squareIcon * 0.25f
         val tl = lerp(0f, sq, m)
-        // the top right corner goes square while the arm closes, so the flat arm end sits on it cleanly
-        val closed = (armAngle / CLOSE_ANGLE).coerceIn(0f, 1f)
-        val tr = lerp(30f * (1f - closed), sq, m)
+        val tr = lerp(30f, sq, m)
         val bottom = lerp(110f, sq, m)
         val inset = sw / 2
         rect.set(cx - bw / 2 + inset, ICON_H - bh + inset, cx + bw / 2 - inset, ICON_H - inset)
@@ -199,17 +197,22 @@ class BouncingSplashView @JvmOverloads constructor(
             // underside still lands exactly flat, but vertical edges stay vertical, so the arm's
             // left side stays lined up with the body and its right end doesn't stick out
             val t = tan(Math.toRadians(armAngle.toDouble())).toFloat()
+            // while closing the arm also sinks, so its bottom line ends up exactly on top of the
+            // body's top line (one line, not two stacked)
+            val drop = ARM_BAND * (armAngle / CLOSE_ANGLE).coerceIn(0f, 1f)
             if (t > 0f) {
                 // closing lifts the solid left part of the arm off the body, fill that space so
-                // the arm and body never come apart
+                // the arm and body never come apart. its top edge is the arm's (sheared, sunk)
+                // underside; wherever that is below the body's top it only paints white on white
                 path.reset()
                 path.moveTo(0f, BODY_TOP + 1f)
                 path.lineTo(HINGE_X, BODY_TOP + 1f)
-                path.lineTo(HINGE_X, BODY_TOP) // top edge = exactly the arm's sheared underside
-                path.lineTo(0f, BODY_TOP - HINGE_X * t)
+                path.lineTo(HINGE_X, BODY_TOP + drop)
+                path.lineTo(0f, BODY_TOP + drop - HINGE_X * t)
                 path.close()
                 canvas.drawPath(path, web)
             }
+            canvas.translate(0f, drop)
             canvas.translate(HINGE_X, BODY_TOP)
             canvas.skew(0f, t)
             canvas.translate(-HINGE_X, -BODY_TOP)
@@ -337,6 +340,7 @@ class BouncingSplashView @JvmOverloads constructor(
         const val ICON_H = 512f
         const val BODY_TOP = 215f // where the body's top edge is; the arm is everything above
         const val HINGE_X = 235.3f // where the arm's underside meets the body's top edge
+        const val ARM_BAND = 53f // thickness of the arm's bottom line, same as the body's line
         const val CLOSE_ANGLE = 16.8f // angle of the arm's underside, shearing by it lays it flush
     }
 }
