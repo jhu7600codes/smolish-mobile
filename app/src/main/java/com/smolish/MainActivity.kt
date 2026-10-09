@@ -177,7 +177,9 @@ class MainActivity : ComponentActivity() {
         findViewById<View>(R.id.retry).setOnClickListener { retry() }
         onBackPressedDispatcher.addCallback(this, backHandler)
 
-        if (intent?.action == ACTION_OFFLINE) offlineByChoice = true
+        if (intent?.action == ACTION_OFFLINE) {
+            if (OfflineStore.isEnabled(this)) offlineByChoice = true else toast(R.string.offline_disabled)
+        }
         if (savedInstanceState == null || web.restoreState(savedInstanceState) == null) {
             web.loadUrl(if (shouldBeOffline()) OfflineStore.URL else HOME)
         }
@@ -263,7 +265,7 @@ class MainActivity : ComponentActivity() {
 
     /** Offline when asked to, or when there's no internet and a pack is saved. */
     private fun shouldBeOffline() = offlineByChoice || OfflineStore.isForced(this) ||
-        (!OfflineStore.isOnline(this) && OfflineStore.hasPack(this))
+        (!OfflineStore.isOnline(this) && OfflineStore.canUse(this))
 
     private fun goOffline() = showLoader { errorView.isVisible = false; web.loadUrl(OfflineStore.URL) }
     private fun goOnline() = showLoader { errorView.isVisible = false; web.loadUrl(HOME) }
@@ -280,7 +282,7 @@ class MainActivity : ComponentActivity() {
             override fun onLost(n: Network) {
                 // wait a moment, wifi <-> mobile handovers drop the network for a split second
                 web.postDelayed({
-                    if (!inOffline() && !OfflineStore.isOnline(this@MainActivity) && OfflineStore.hasPack(this@MainActivity)) {
+                    if (!inOffline() && !OfflineStore.isOnline(this@MainActivity) && OfflineStore.canUse(this@MainActivity)) {
                         toast(R.string.went_offline)
                         goOffline()
                     }
@@ -294,6 +296,7 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         if (intent.action == ACTION_OFFLINE) {
+            if (!OfflineStore.isEnabled(this)) return toast(R.string.offline_disabled)
             offlineByChoice = true
             if (!inOffline()) goOffline()
         }
@@ -365,7 +368,7 @@ class MainActivity : ComponentActivity() {
         override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {
             if (!request.isForMainFrame) return
             // the site can't be reached but there's a pack: show that instead of the error screen
-            if (isOurHost(request.url.host) && OfflineStore.hasPack(this@MainActivity)) {
+            if (isOurHost(request.url.host) && OfflineStore.canUse(this@MainActivity)) {
                 view.post { web.loadUrl(OfflineStore.URL) }
                 return
             }
@@ -725,6 +728,7 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         // "always use offline mode" may have changed in settings
+        if (!OfflineStore.isEnabled(this)) offlineByChoice = false // switched off in settings
         if (splashHidden) {
             val forced = OfflineStore.isForced(this)
             if (forced && !inOffline()) goOffline()

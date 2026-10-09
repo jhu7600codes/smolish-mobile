@@ -46,8 +46,16 @@ object OfflineStore {
         staging.renameTo(dir(ctx))
     }
 
+    // master switch in settings: off = the pack stays saved but the app never goes offline
+    fun isEnabled(ctx: Context) = ctx.getSharedPreferences(PREFS, 0).getBoolean("enabled", true)
+    fun setEnabled(ctx: Context, on: Boolean) = ctx.getSharedPreferences(PREFS, 0).edit().putBoolean("enabled", on).apply()
+
+    /** Whether the app may switch to the offline feed by itself. */
+    fun canUse(ctx: Context) = isEnabled(ctx) && hasPack(ctx)
+
     // "always use offline mode" from settings
-    fun isForced(ctx: Context) = ctx.getSharedPreferences(PREFS, 0).getBoolean("forced", false)
+    fun isForced(ctx: Context) = isEnabled(ctx) && ctx.getSharedPreferences(PREFS, 0).getBoolean("forced", false)
+    fun isForcedSetting(ctx: Context) = ctx.getSharedPreferences(PREFS, 0).getBoolean("forced", false)
     fun setForced(ctx: Context, on: Boolean) = ctx.getSharedPreferences(PREFS, 0).edit().putBoolean("forced", on).apply()
 
     fun isOnline(ctx: Context): Boolean {

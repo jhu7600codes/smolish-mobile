@@ -89,9 +89,17 @@ class SettingsActivity : ComponentActivity() {
             isChecked = isSeamless(this@SettingsActivity)
             setOnCheckedChangeListener { _, on -> getSharedPreferences("app", 0).edit().putBoolean("seamless", on).apply() }
         }
-        findViewById<Switch>(R.id.forced).apply {
-            isChecked = OfflineStore.isForced(this@SettingsActivity)
+        val forced = findViewById<Switch>(R.id.forced).apply {
+            isChecked = OfflineStore.isForcedSetting(this@SettingsActivity)
+            isEnabled = OfflineStore.isEnabled(this@SettingsActivity)
             setOnCheckedChangeListener { _, on -> OfflineStore.setForced(this@SettingsActivity, on) }
+        }
+        findViewById<Switch>(R.id.enabled).apply {
+            isChecked = OfflineStore.isEnabled(this@SettingsActivity)
+            setOnCheckedChangeListener { _, on ->
+                OfflineStore.setEnabled(this@SettingsActivity, on)
+                forced.isEnabled = on // "always offline" only means something while it's on
+            }
         }
         showSaved()
     }
