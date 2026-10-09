@@ -13,7 +13,12 @@ import android.graphics.Color
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.os.SystemClock
+import android.view.PixelCopy
+import android.widget.ImageView
+import kotlin.math.max
 import android.util.Base64
 import android.util.Rational
 import android.view.View
@@ -52,8 +57,8 @@ class MainActivity : ComponentActivity() {
     companion object {
         private const val HOME = "https://smolish.com/"
         private const val HOST = "smolish.com"
-        private const val MIN_SPLASH_MS = 1500L // long enough for the intro + first landing
         private const val MAX_SPLASH_MS = 12_000L
+        private const val LOADER_MIN_MS = 600L // the cube loader stays at least this long, no flicker
 
         // paths that count as "the video feed" (no pull to refresh, no long press, back exits).
         // adjust if the site moves its feed somewhere else.
@@ -78,20 +83,27 @@ class MainActivity : ComponentActivity() {
     private lateinit var errorView: View
     private lateinit var fullscreen: FrameLayout
     private lateinit var splash: BouncingSplashView
+    private lateinit var freeze: ImageView
     private lateinit var popupHost: FrameLayout
     private lateinit var statusBg: View
     private lateinit var navBg: View
     private var popup: WebView? = null
 
-    private val startedAt = SystemClock.uptimeMillis()
     private val bridgeJs by lazy { assets.open("bridge.js").bufferedReader().use { it.readText() } }
 
-    private var splashHidden = false
+    @Volatile private var splashHidden = false
+    private var pageReady = false
+    // cube loader over a frozen screenshot, used for every page load after the first
+    @Volatile private var loading = false
+    private var loaderShownAt = 0L
+    private var frozen: Bitmap? = null
+    @Volatile private var resumed = false
+    @Volatile private var soundRefreshQueued = false
     private var loadFailed = false
     private var onChallenge = false // cloudflare "verify your browser" page is showing
     @Volatile private var pageAtTop = true
     // cached because the refresh layout asks on every touch move
-    private var onFeed = true
+    @Volatile private var onFeed = true
     private var videoPlaying = false
 
     private var customView: View? = null
@@ -129,6 +141,9 @@ class MainActivity : ComponentActivity() {
         errorView = findViewById(R.id.error)
         fullscreen = findViewById(R.id.fullscreen)
         splash = findViewById(R.id.splash)
+        freeze = findViewById(R.id.freeze)
+        // the intro always plays to the end; "loading" only starts once the cube falls
+        splash.onIntroDone = { maybeHideSplash() }
         popupHost = findViewById(R.id.popup_host)
         statusBg = findViewById(R.id.status_bg)
         navBg = findViewById(R.id.nav_bg)
@@ -153,7 +168,7 @@ class MainActivity : ComponentActivity() {
         if (savedInstanceState == null || web.restoreState(savedInstanceState) == null) {
             web.loadUrl(HOME)
         }
-        splash.postDelayed({ hideSplash() }, MAX_SPLASH_MS) // never get stuck on the splash
+        splash.postDelayed({ onPageReady() }, MAX_SPLASH_MS) // never get stuck on the splash
     }
 
     /** Shared by the main webview and login popups. */
@@ -216,7 +231,11 @@ class MainActivity : ComponentActivity() {
         refresh.setProgressBackgroundColorSchemeColor(ContextCompat.getColor(this, R.color.bg))
         // returning true means "the child can still scroll up", which blocks the refresh gesture
         refresh.setOnChildScrollUpCallback { _, _ -> onFeed || web.scrollY > 0 || !pageAtTop }
-        refresh.setOnRefreshListener { web.reload() }
+        refresh.setOnRefreshListener {
+            // no spinner, the cube loader takes over (posted so the spinner is gone from the screenshot)
+            refresh.isRefreshing = false
+            refresh.post { reloadWithLoader() }
+        }
     }
 
     private fun isOurHost(host: String?) = host != null && (host == HOST || host.endsWith(".$HOST"))
@@ -251,6 +270,10 @@ class MainActivity : ComponentActivity() {
             onChallenge = false
             pageAtTop = true
             onFeed = isFeed(url)
+            pageReady = false
+            soundRefreshQueued = false
+            // every full page load (links, redirects, the site reloading itself) gets the cube too
+            if (splashHidden) showLoader()
         }
 
         // cloudflare serves its challenge page with 403/503. leave that page completely alone,
@@ -265,7 +288,7 @@ class MainActivity : ComponentActivity() {
                 errorView.isVisible = false
                 if (!onChallenge) injectBridge()
             }
-            hideSplash()
+            onPageReady()
         }
 
         // client side navigation in next.js only changes history, not the page
@@ -281,7 +304,7 @@ class MainActivity : ComponentActivity() {
             loadFailed = true
             refresh.isRefreshing = false
             errorView.isVisible = true
-            hideSplash()
+            onPageReady()
         }
     }
 
@@ -381,6 +404,19 @@ class MainActivity : ComponentActivity() {
         @JavascriptInterface
         fun onBarColor(color: String) = runOnUiThread { setBarColor(color) }
 
+        /**
+         * The webview's audio starts glitching after a few videos and a fresh page load fixes it,
+         * so bridge.js asks for a reload when the 4th video starts. Returns whether we reload, so
+         * the page only stops that video when we really do.
+         */
+        @JavascriptInterface
+        fun refreshForSound(): Boolean {
+            if (!onFeed || loading || soundRefreshQueued || !splashHidden || !resumed || customView != null) return false
+            soundRefreshQueued = true
+            runOnUiThread { reloadWithLoader() }
+            return true
+        }
+
         @JavascriptInterface
         fun onScrollTop(atTop: Boolean) {
             pageAtTop = atTop
@@ -460,9 +496,68 @@ class MainActivity : ComponentActivity() {
         customViewCallback = null
     }
 
-    private fun retry() {
-        errorView.isVisible = false
-        if (web.url == null) web.loadUrl(HOME) else web.reload()
+    private fun retry() = reloadWithLoader()
+
+    private fun reloadWithLoader() {
+        showLoader {
+            errorView.isVisible = false
+            if (web.url == null) web.loadUrl(HOME) else web.reload()
+        }
+    }
+
+    /**
+     * Freezes the screen as it is right now (a real screenshot, so the black video frame and the
+     * site's menus stay exactly where they were, no blur), bounces the cube on top of it, then
+     * runs [then], e.g. the reload. Hidden again by [onPageReady].
+     */
+    private fun showLoader(then: (() -> Unit)? = null) {
+        if (!splashHidden || loading) {
+            then?.invoke()
+            return
+        }
+        loading = true
+        val decor = window.decorView
+        val shot = Bitmap.createBitmap(max(1, decor.width), max(1, decor.height), Bitmap.Config.ARGB_8888)
+        // PixelCopy reads what's actually on screen, video surfaces included (drawing the
+        // webview into a bitmap would miss those and the system bar strips)
+        PixelCopy.request(window, shot, { result ->
+            if (loading) {
+                frozen?.recycle()
+                frozen = if (result == PixelCopy.SUCCESS) shot else null
+                freeze.setImageBitmap(frozen)
+                freeze.animate().cancel()
+                splash.animate().cancel()
+                freeze.alpha = 1f
+                splash.alpha = 1f
+                freeze.isVisible = true
+                splash.background = null // see the frozen screen through it
+                splash.isVisible = true
+                splash.startLoader()
+                loaderShownAt = SystemClock.uptimeMillis()
+            }
+            if (frozen !== shot) shot.recycle()
+            then?.invoke()
+        }, Handler(Looper.getMainLooper()))
+    }
+
+    private fun hideLoader() {
+        if (!loading) return
+        loading = false
+        val wait = (LOADER_MIN_MS - (SystemClock.uptimeMillis() - loaderShownAt)).coerceAtLeast(0)
+        splash.animate().alpha(0f).setStartDelay(wait).setDuration(250)
+        freeze.animate().alpha(0f).setStartDelay(wait).setDuration(250).withEndAction {
+            splash.stop()
+            splash.isVisible = false
+            freeze.isVisible = false
+            freeze.setImageDrawable(null)
+            frozen?.recycle()
+            frozen = null
+        }
+    }
+
+    private fun onPageReady() {
+        pageReady = true
+        if (!splashHidden) maybeHideSplash() else hideLoader()
     }
 
     private val backHandler = object : OnBackPressedCallback(true) {
@@ -477,11 +572,11 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun hideSplash() {
-        if (splashHidden) return
+    /** The first splash goes away once the intro is done and the page has loaded, whichever is last. */
+    private fun maybeHideSplash() {
+        if (splashHidden || !pageReady || !splash.introFinished) return
         splashHidden = true
-        val wait = (MIN_SPLASH_MS - (SystemClock.uptimeMillis() - startedAt)).coerceAtLeast(0)
-        splash.animate().alpha(0f).setStartDelay(wait).setDuration(350).withEndAction {
+        splash.animate().alpha(0f).setStartDelay(150).setDuration(350).withEndAction {
             splash.stop()
             splash.isVisible = false
             web.postDelayed({ maybeAskNotifications() }, 1500)
@@ -530,11 +625,13 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        resumed = true
         web.onResume()
     }
 
     override fun onPause() {
         super.onPause()
+        resumed = false
         CookieManager.getInstance().flush() // keep the login if the app gets killed
         if (!isInPictureInPictureMode) web.onPause()
     }

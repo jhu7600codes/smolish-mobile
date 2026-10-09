@@ -101,6 +101,17 @@
         android:background="@android:color/black"
         android:visibility="gone" />
 
+    <!-- screenshot of the screen right before a reload, the cube bounces on top of it -->
+    <ImageView
+        android:id="@+id/freeze"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@color/bg"
+        android:contentDescription="@null"
+        android:importantForAccessibility="no"
+        android:scaleType="fitXY"
+        android:visibility="gone" />
+
     <com.smolish.BouncingSplashView
         android:id="@+id/splash"
         android:layout_width="match_parent"

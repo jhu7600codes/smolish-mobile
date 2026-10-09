@@ -102,10 +102,34 @@ class BouncingSplashView @JvmOverloads constructor(
     private var lastFrame = 0L
     private var running = true
 
+    /** Called once when the intro is over and the cube starts to fall. */
+    var onIntroDone: (() -> Unit)? = null
+    val introFinished get() = introDone
+
     private val floor get() = height * 0.62f // the invisible line
 
     fun stop() {
         running = false
+    }
+
+    /** Loader mode for later page loads: no intro, the cube just drops from the middle and hops. */
+    fun startLoader() {
+        introDone = true
+        x = width / 2f
+        y = height / 2f
+        vx = 0f
+        vy = 0f
+        grounded = false
+        rising = false
+        angle = 0f
+        squash = 0f
+        squashVel = 0f
+        eyeX = 0f
+        eyeY = 0f
+        turnTo = if (Random.nextBoolean()) fallTurn else -fallTurn
+        lastFrame = 0L
+        running = true
+        invalidate()
     }
 
     override fun onDraw(canvas: Canvas) {
@@ -250,6 +274,7 @@ class BouncingSplashView @JvmOverloads constructor(
             rising = false
             vy = 0f
             turnTo = if (Random.nextBoolean()) fallTurn else -fallTurn
+            onIntroDone?.invoke()
         }
     }
 

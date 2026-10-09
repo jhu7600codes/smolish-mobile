@@ -83,6 +83,23 @@
     scheduleBars(600);
   };
 
+  // --- sound bug workaround: after a few videos the webview's audio starts cutting out and
+  // glitching, a fresh page load fixes it. count the videos that start playing; when the 4th one
+  // starts (3 watched) the app reloads behind the cube loader, and we stop that video right away
+  // so it doesn't play sound or draw frames before the screen gets frozen.
+  var started = 0, lastVideo = null;
+  document.addEventListener('play', function (e) {
+    var v = e.target;
+    if (!(v instanceof HTMLVideoElement)) return;
+    var key = v.currentSrc || v.src;
+    if (!key || key === lastVideo) return;
+    lastVideo = key;
+    if (++started > 3 && B.refreshForSound()) {
+      v.muted = true;
+      v.pause();
+    }
+  }, true);
+
   // --- blob downloads.
   // a blob: url only exists inside this page, so DownloadManager can't fetch it.
   // instead we read the blob here, turn it into a base64 data url and hand that to native code,
