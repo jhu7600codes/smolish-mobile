@@ -1,0 +1,190 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>Smolish offline</title>
+<style>
+  :root { --nav: 66px; --blue: #1d9bf0; --btn: rgba(28, 29, 32, .82); }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; background: #000; color: #fff; overflow: hidden;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; user-select: none; -webkit-user-select: none; }
+  svg { display: block; }
+  .ic { width: 26px; height: 26px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+  /* the feed: one full height smol per screen, snapping like the site */
+  .feed { position: fixed; inset: 0 0 var(--nav) 0; overflow-y: scroll; scroll-snap-type: y mandatory; overscroll-behavior: none; scrollbar-width: none; }
+  .feed::-webkit-scrollbar { display: none; }
+  .smol { position: relative; height: 100%; scroll-snap-align: start; scroll-snap-stop: always; background: #000; overflow: hidden; }
+  .smol video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; background: #000; }
+  .shade { position: absolute; inset: auto 0 0 0; height: 42%; pointer-events: none;
+    background: linear-gradient(to top, rgba(0,0,0,.55), rgba(0,0,0,0)); }
+  .paused { position: absolute; left: 50%; top: 50%; width: 76px; height: 76px; margin: -38px 0 0 -38px; border-radius: 50%;
+    background: rgba(0,0,0,.45); display: none; align-items: center; justify-content: center; pointer-events: none; }
+  .smol.is-paused .paused { display: flex; }
+
+  /* right column */
+  .side { position: absolute; right: 6px; bottom: 38px; display: flex; flex-direction: column; align-items: center; }
+  .round { width: 48px; height: 48px; border-radius: 50%; background: var(--btn); border: 1px solid rgba(255,255,255,.07);
+    display: flex; align-items: center; justify-content: center; color: #fff; box-shadow: 0 2px 10px rgba(0,0,0,.35); }
+  .count { font-size: 13px; font-weight: 700; color: rgba(255,255,255,.85); margin: 6px 0 14px; min-height: 0; }
+  .side > .round + .round { margin-top: 10px; }
+  .count:empty { display: none; }
+
+  /* bottom left info */
+  .info { position: absolute; left: 20px; right: 76px; bottom: 30px; }
+  .who { display: flex; align-items: center; gap: 12px; }
+  .avatar { width: 44px; height: 44px; border-radius: 50%; object-fit: cover; background: #2a2b30; flex: none; }
+  .handle { font-weight: 800; font-size: 18px; max-width: 46vw; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-shadow: 0 1px 4px rgba(0,0,0,.5); }
+  .follow { background: var(--blue); color: #fff; font-weight: 800; font-size: 15px; border-radius: 999px; padding: 8px 20px;
+    box-shadow: 0 0 14px rgba(29,155,240,.35); }
+  .title { font-weight: 800; font-size: 17px; margin-top: 12px; text-shadow: 0 1px 4px rgba(0,0,0,.5); }
+  .desc { font-size: 16px; color: rgba(255,255,255,.75); margin-top: 4px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .bar { position: absolute; left: 16px; right: 16px; bottom: 8px; height: 3px; border-radius: 3px; background: rgba(255,255,255,.25); overflow: hidden; }
+  .bar i { display: block; height: 100%; width: 0; background: #fff; border-radius: 3px; }
+
+  /* top: Smols / Friends pill + sound */
+  .top { position: fixed; top: 12px; left: 0; right: 0; display: flex; justify-content: center; pointer-events: none; z-index: 5; }
+  .pill { pointer-events: auto; display: flex; gap: 22px; align-items: center; padding: 9px 22px; border-radius: 999px; background: rgba(18,19,22,.82); }
+  .pill b { font-size: 21px; font-weight: 900; }
+  .pill span { font-size: 21px; font-weight: 800; color: rgba(255,255,255,.55); }
+  .sound { position: fixed; top: 16px; right: 12px; z-index: 5; width: 42px; height: 42px; }
+
+  /* bottom nav */
+  .nav { position: fixed; left: 0; right: 0; bottom: 0; height: var(--nav); background: #08090b; display: flex;
+    justify-content: space-around; align-items: center; border-top: 1px solid rgba(255,255,255,.04); z-index: 6; }
+  .nav a { color: rgba(255,255,255,.62); padding: 10px; }
+  .nav a.on { color: #fff; }
+  .me { width: 30px; height: 30px; border-radius: 50%; background: #2a2b30; display: flex; align-items: center; justify-content: center; }
+
+  /* every other tab while offline */
+  .offline { position: fixed; inset: 0 0 var(--nav) 0; background: #08090b; z-index: 4; display: none;
+    flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 32px; }
+  .offline.show { display: flex; }
+  .offline h1 { font-size: 22px; font-weight: 900; margin: 22px 0 8px; }
+  .offline p { font-size: 15px; color: rgba(255,255,255,.6); margin: 0 0 24px; max-width: 300px; line-height: 1.4; }
+  .offline button { background: var(--blue); color: #fff; border: 0; font: inherit; font-weight: 800; font-size: 16px; padding: 12px 26px; border-radius: 999px; }
+</style>
+</head>
+<body>
+<div class="feed" id="feed"></div>
+
+<div class="top"><div class="pill"><b id="smols">Smols</b><span data-off>Friends</span></div></div>
+<button class="round sound" id="sound" aria-label="Sound"></button>
+
+<div class="offline" id="offline">
+  <!-- the smolish character -->
+  <svg width="84" height="84" viewBox="0 0 84 84"><rect x="5" y="5" width="74" height="74" rx="16" fill="none" stroke="#fff" stroke-width="10"/>
+    <circle cx="26" cy="56" r="6.4" fill="#fff"/><circle cx="58" cy="56" r="6.4" fill="#fff"/></svg>
+  <h1>You're in offline mode</h1>
+  <p id="offline-text">Only your downloaded Smols work right now.</p>
+  <button id="back">Back to Smols</button>
+</div>
+
+<nav class="nav">
+  <a class="on" id="home" aria-label="Home"><svg class="ic" viewBox="0 0 24 24"><path d="M3 10a2 2 0 0 1 .7-1.5l7-6a2 2 0 0 1 2.6 0l7 6a2 2 0 0 1 .7 1.5v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 15c1.6 1.3 4.4 1.3 6 0"/></svg></a>
+  <a data-off aria-label="Messages"><svg class="ic" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M8 9h8M8 13h5"/></svg></a>
+  <a data-off aria-label="Search"><svg class="ic" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg></a>
+  <a data-off aria-label="Notifications"><svg class="ic" viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg></a>
+  <a data-off aria-label="Profile"><span class="me"><svg class="ic" style="width:18px;height:18px" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg></span></a>
+</nav>
+
+<script>
+(function () {
+  var ICONS = {
+    heart: '<path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/>',
+    comment: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M8 9h8M8 13h5"/>',
+    save: '<path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/>',
+    share: '<path d="M12 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-6"/><path d="m15 3 6 6-6 6"/><path d="M21 9h-7a4 4 0 0 0-4 4v1"/>',
+    more: '<circle cx="5" cy="12" r="1.3" fill="currentColor"/><circle cx="12" cy="12" r="1.3" fill="currentColor"/><circle cx="19" cy="12" r="1.3" fill="currentColor"/>',
+    on: '<path d="M11 4.7a.7.7 0 0 0-1.2-.5L6.4 7.6A1.4 1.4 0 0 1 5.4 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.4a1.4 1.4 0 0 1 1 .4l3.4 3.4a.7.7 0 0 0 1.2-.5z"/><path d="M16 9a5 5 0 0 1 0 6"/><path d="M19.4 18.4a9 9 0 0 0 0-12.8"/>',
+    off: '<path d="M11 4.7a.7.7 0 0 0-1.2-.5L6.4 7.6A1.4 1.4 0 0 1 5.4 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.4a1.4 1.4 0 0 1 1 .4l3.4 3.4a.7.7 0 0 0 1.2-.5z"/><path d="m22 9-6 6M16 9l6 6"/>',
+    play: '<path d="M8 5.5v13l11-6.5z" fill="#fff" stroke="none"/>'
+  };
+  var DEFAULT_AVATAR = 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 44 44"><rect width="44" height="44" fill="#2a2b30"/><circle cx="22" cy="17" r="7" fill="#55575e"/><path d="M8 40a14 14 0 0 1 28 0" fill="#55575e"/></svg>');
+  function icon(name, size) { return '<svg class="ic" viewBox="0 0 24 24"' + (size ? ' style="width:' + size + 'px;height:' + size + 'px"' : '') + '>' + ICONS[name] + '</svg>'; }
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+  function num(n) { if (n == null || n === '') return ''; n = +n; if (isNaN(n)) return ''; return n >= 1e6 ? (n / 1e6).toFixed(1).replace('.0', '') + 'M' : n >= 1e4 ? Math.round(n / 1e3) + 'K' : String(n); }
+
+  var feed = document.getElementById('feed'), offline = document.getElementById('offline');
+  var muted = false;
+  var sound = document.getElementById('sound');
+  function drawSound() { sound.innerHTML = icon(muted ? 'off' : 'on', 22); }
+  drawSound();
+  sound.onclick = function () { muted = !muted; drawSound(); feed.querySelectorAll('video').forEach(function (v) { v.muted = muted; }); };
+
+  function showOffline(text) {
+    document.getElementById('offline-text').textContent = text || 'Only your downloaded Smols work right now.';
+    offline.classList.add('show');
+    feed.querySelectorAll('video').forEach(function (v) { v.pause(); });
+    document.getElementById('home').classList.remove('on');
+  }
+  function backToSmols() {
+    offline.classList.remove('show');
+    document.getElementById('home').classList.add('on');
+    play(current);
+  }
+  document.getElementById('back').onclick = backToSmols;
+  document.getElementById('home').onclick = backToSmols;
+  document.getElementById('smols').onclick = backToSmols;
+  document.addEventListener('click', function (e) {
+    if (e.target.closest('[data-off]')) showOffline();
+  });
+
+  var current = null;
+  function play(section) {
+    current = section;
+    if (!section || offline.classList.contains('show')) return;
+    feed.querySelectorAll('.smol').forEach(function (s) {
+      var v = s.querySelector('video');
+      if (s === section) { v.muted = muted; v.play().catch(function () {}); s.classList.remove('is-paused'); }
+      else if (!v.paused) { v.pause(); v.currentTime = 0; }
+    });
+  }
+
+  fetch('/manifest.json').then(function (r) { return r.ok ? r.json() : []; }).catch(function () { return []; }).then(function (items) {
+    if (!items.length) {
+      showOffline('No offline Smols yet. Long-press the Smolish icon, open Settings and tap "Prepare offline mode".');
+      document.getElementById('back').style.display = 'none';
+      return;
+    }
+    items.forEach(function (it) {
+      var s = document.createElement('section');
+      s.className = 'smol';
+      s.innerHTML =
+        '<video src="/media/' + encodeURIComponent(it.video) + '" playsinline loop preload="metadata"></video>' +
+        '<div class="shade"></div><div class="paused">' + icon('play', 38) + '</div>' +
+        '<div class="side">' +
+          '<div class="round" data-off>' + icon('heart') + '</div><div class="count">' + num(it.likes) + '</div>' +
+          '<div class="round" data-off>' + icon('comment') + '</div><div class="count">' + num(it.comments) + '</div>' +
+          '<div class="round" data-off>' + icon('save') + '</div>' +
+          '<div class="round" data-off>' + icon('share') + '</div>' +
+          '<div class="round" data-off>' + icon('more') + '</div>' +
+        '</div>' +
+        '<div class="info">' +
+          '<div class="who"><img class="avatar" data-off src="' + (it.avatar ? '/media/' + encodeURIComponent(it.avatar) : DEFAULT_AVATAR) + '" onerror="this.src=\'' + DEFAULT_AVATAR + '\'">' +
+          '<span class="handle" data-off>' + esc(it.handle || it.name || 'smol') + '</span>' +
+          '<span class="follow" data-off>Follow</span></div>' +
+          (it.title ? '<div class="title">' + esc(it.title) + '</div>' : '') +
+          (it.description ? '<div class="desc">' + esc(it.description) + '</div>' : '') +
+        '</div>' +
+        '<div class="bar"><i></i></div>';
+      var v = s.querySelector('video'), bar = s.querySelector('.bar i');
+      v.addEventListener('timeupdate', function () { if (v.duration) bar.style.width = (100 * v.currentTime / v.duration) + '%'; });
+      // tap the video to pause / play
+      v.addEventListener('click', function () {
+        if (v.paused) { v.play().catch(function () {}); s.classList.remove('is-paused'); }
+        else { v.pause(); s.classList.add('is-paused'); }
+      });
+      feed.appendChild(s);
+    });
+    // whichever smol is mostly on screen plays, the rest stop
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) { if (e.isIntersecting) play(e.target); });
+    }, { root: feed, threshold: 0.6 });
+    feed.querySelectorAll('.smol').forEach(function (s) { io.observe(s); });
+  });
+})();
+</script>
+</body>
+</html>

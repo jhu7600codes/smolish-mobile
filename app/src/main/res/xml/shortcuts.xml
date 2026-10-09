@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- long-press the launcher icon -->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="settings"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_settings"
+        android:shortcutShortLabel="@string/settings_short">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetClass="com.smolish.SettingsActivity"
+            android:targetPackage="com.smolish" />
+    </shortcut>
+    <shortcut
+        android:shortcutId="offline"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_offline"
+        android:shortcutShortLabel="@string/offline_short">
+        <intent
+            android:action="com.smolish.action.OFFLINE"
+            android:targetClass="com.smolish.MainActivity"
+            android:targetPackage="com.smolish" />
+    </shortcut>
+</shortcuts>

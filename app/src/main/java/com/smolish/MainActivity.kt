@@ -10,6 +10,9 @@ import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.graphics.Color
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -75,6 +78,7 @@ class MainActivity : ComponentActivity() {
             "www.facebook.com" to "/dialog/oauth", "m.facebook.com" to "",
             "challenges.cloudflare.com" to "",
         )
+        const val ACTION_OFFLINE = "com.smolish.action.OFFLINE"
         private val AUTH_HOST_SUFFIXES = listOf(".auth0.com", ".clerk.accounts.dev", ".supabase.co", ".firebaseapp.com")
     }
 
@@ -99,6 +103,9 @@ class MainActivity : ComponentActivity() {
     private var frozen: Bitmap? = null
     @Volatile private var resumed = false
     @Volatile private var soundRefreshQueued = false
+    // opened from the "Offline mode" shortcut: stay offline even if the internet comes back
+    private var offlineByChoice = false
+    private var network: ConnectivityManager.NetworkCallback? = null
     private var loadFailed = false
     private var onChallenge = false // cloudflare "verify your browser" page is showing
     @Volatile private var pageAtTop = true
@@ -165,8 +172,9 @@ class MainActivity : ComponentActivity() {
         findViewById<View>(R.id.retry).setOnClickListener { retry() }
         onBackPressedDispatcher.addCallback(this, backHandler)
 
+        if (intent?.action == ACTION_OFFLINE) offlineByChoice = true
         if (savedInstanceState == null || web.restoreState(savedInstanceState) == null) {
-            web.loadUrl(HOME)
+            web.loadUrl(if (shouldBeOffline()) OfflineStore.URL else HOME)
         }
         splash.postDelayed({ onPageReady() }, MAX_SPLASH_MS) // never get stuck on the splash
     }
@@ -242,7 +250,48 @@ class MainActivity : ComponentActivity() {
 
     private fun isFeed(url: String?): Boolean {
         val uri = url?.let(Uri::parse) ?: return true
+        if (uri.host == OfflineStore.HOST) return true // the offline feed acts like the real one
         return isOurHost(uri.host) && (uri.path ?: "").trimEnd('/') in FEED_PATHS
+    }
+
+    private fun inOffline() = web.url?.let { Uri.parse(it).host } == OfflineStore.HOST
+
+    /** Offline when asked to, or when there's no internet and a pack is saved. */
+    private fun shouldBeOffline() = offlineByChoice || OfflineStore.isForced(this) ||
+        (!OfflineStore.isOnline(this) && OfflineStore.hasPack(this))
+
+    private fun goOffline() = showLoader { errorView.isVisible = false; web.loadUrl(OfflineStore.URL) }
+    private fun goOnline() = showLoader { errorView.isVisible = false; web.loadUrl(HOME) }
+
+    // follow the connection: lose it -> offline feed (if there's a pack), get it back -> the site
+    private fun watchNetwork() {
+        val cm = getSystemService(ConnectivityManager::class.java) ?: return
+        val cb = object : ConnectivityManager.NetworkCallback() {
+            override fun onCapabilitiesChanged(n: Network, caps: NetworkCapabilities) {
+                if (caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)) runOnUiThread {
+                    if (inOffline() && !offlineByChoice && !OfflineStore.isForced(this@MainActivity)) goOnline()
+                }
+            }
+            override fun onLost(n: Network) {
+                // wait a moment, wifi <-> mobile handovers drop the network for a split second
+                web.postDelayed({
+                    if (!inOffline() && !OfflineStore.isOnline(this@MainActivity) && OfflineStore.hasPack(this@MainActivity)) {
+                        toast(R.string.went_offline)
+                        goOffline()
+                    }
+                }, 3000)
+            }
+        }
+        cm.registerDefaultNetworkCallback(cb)
+        network = cb
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        if (intent.action == ACTION_OFFLINE) {
+            offlineByChoice = true
+            if (!inOffline()) goOffline()
+        }
     }
 
     private fun isAuthPage(uri: Uri): Boolean {
@@ -257,10 +306,13 @@ class MainActivity : ComponentActivity() {
     private fun injectBridge() = web.evaluateJavascript(bridgeJs, null)
 
     private inner class Client : WebViewClient() {
+        override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? =
+            if (request.url.host == OfflineStore.HOST) OfflineStore.serve(this@MainActivity, request) else null
+
         override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
             val uri = request.url
             if (!request.isForMainFrame) return false // iframes (captcha, embeds) load as usual
-            if (isHttp(uri) && (isOurHost(uri.host) || isAuthPage(uri))) return false
+            if (isHttp(uri) && (isOurHost(uri.host) || uri.host == OfflineStore.HOST || isAuthPage(uri))) return false
             openExternal(uri)
             return true
         }
@@ -286,7 +338,8 @@ class MainActivity : ComponentActivity() {
             refresh.isRefreshing = false
             if (!loadFailed) {
                 errorView.isVisible = false
-                if (!onChallenge) injectBridge()
+                if (inOffline()) setBarColor("#08090b") // the offline feed's nav color
+                else if (!onChallenge) injectBridge()
             }
             onPageReady()
         }
@@ -301,6 +354,11 @@ class MainActivity : ComponentActivity() {
 
         override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {
             if (!request.isForMainFrame) return
+            // the site can't be reached but there's a pack: show that instead of the error screen
+            if (isOurHost(request.url.host) && OfflineStore.hasPack(this@MainActivity)) {
+                view.post { web.loadUrl(OfflineStore.URL) }
+                return
+            }
             loadFailed = true
             refresh.isRefreshing = false
             errorView.isVisible = true
@@ -626,6 +684,12 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        // "always use offline mode" may have changed in settings
+        if (splashHidden) {
+            val forced = OfflineStore.isForced(this)
+            if (forced && !inOffline()) goOffline()
+            else if (!forced && !offlineByChoice && inOffline() && OfflineStore.isOnline(this)) goOnline()
+        }
         resumed = true
         web.onResume()
     }
@@ -637,7 +701,14 @@ class MainActivity : ComponentActivity() {
         if (!isInPictureInPictureMode) web.onPause()
     }
 
+    override fun onStart() {
+        super.onStart()
+        watchNetwork()
+    }
+
     override fun onStop() {
+        network?.let { getSystemService(ConnectivityManager::class.java)?.unregisterNetworkCallback(it) }
+        network = null
         super.onStop()
         // also covers closing the pip window
         web.evaluateJavascript("document.querySelectorAll('video').forEach(function(v){v.pause()})", null)
