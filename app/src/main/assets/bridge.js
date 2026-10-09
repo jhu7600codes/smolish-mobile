@@ -108,6 +108,40 @@
     }
   }, true);
 
+  // --- after a sound reload: hide the Smols/Friends top bar (the site doesn't show it this deep
+  // into the feed). it's found by its text, then we hide the whole bar around it (the widest
+  // short box), and keep doing that for a few seconds since the site may render it late.
+  window.__smolishHideTopbar = function () {
+    function find() {
+      var walk = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {
+        acceptNode: function (n) { return n.nodeValue.trim() === 'Smols' ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP; }
+      });
+      for (var t = walk.nextNode(); t; t = walk.nextNode()) {
+        var el = t.parentElement;
+        while (el && el.textContent.indexOf('Friends') < 0) el = el.parentElement;
+        if (!el) continue;
+        // climb to the bar itself: the biggest ancestor that's still short (not the whole page)
+        while (el.parentElement && el.parentElement !== document.body &&
+               el.parentElement.getBoundingClientRect().height < 160) el = el.parentElement;
+        return el;
+      }
+      return null;
+    }
+    function hide() {
+      var bar = find();
+      if (bar && bar.style.visibility !== 'hidden') bar.style.visibility = 'hidden';
+    }
+    hide();
+    var queued = false;
+    var mo = new MutationObserver(function () {
+      if (queued) return;
+      queued = true;
+      requestAnimationFrame(function () { queued = false; hide(); });
+    });
+    mo.observe(document.body, { childList: true, subtree: true });
+    setTimeout(function () { mo.disconnect(); }, 8000);
+  };
+
   // --- blob downloads.
   // a blob: url only exists inside this page, so DownloadManager can't fetch it.
   // instead we read the blob here, turn it into a base64 data url and hand that to native code,

@@ -29,4 +29,7 @@
     <string name="delete_offline">Delete offline videos</string>
     <string name="always_offline">Always use offline mode</string>
     <string name="went_offline">No internet, switched to your offline Smols</string>
+    <string name="playback_section">Playback</string>
+    <string name="seamless">Seamless mode</string>
+    <string name="seamless_explain">The reload every 3 videos that fixes the sound happens without the cube, the last frame just stays on screen until the next video plays, like a tiny lag.</string>
 </resources>

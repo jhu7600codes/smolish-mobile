@@ -101,6 +101,11 @@ class MainActivity : ComponentActivity() {
     @Volatile private var loading = false
     private var loaderShownAt = 0L
     private var frozen: Bitmap? = null
+    // seamless mode: the sound reload only freezes the last frame (no cube), so it looks like a lag
+    private var seamlessLoad = false
+    private var waitingForVideo = false
+    private val seamlessTimeout = Runnable { finishHide() }
+    private var hideTopbarNext = false
     @Volatile private var resumed = false
     @Volatile private var soundRefreshQueued = false
     // opened from the "Offline mode" shortcut: stay offline even if the internet comes back
@@ -324,6 +329,7 @@ class MainActivity : ComponentActivity() {
             onFeed = isFeed(url)
             pageReady = false
             soundRefreshQueued = false
+            setVideoPlaying(false) // the old page's videos are gone
             // every full page load (links, redirects, the site reloading itself) gets the cube too
             if (splashHidden) showLoader()
         }
@@ -339,7 +345,11 @@ class MainActivity : ComponentActivity() {
             if (!loadFailed) {
                 errorView.isVisible = false
                 if (inOffline()) setBarColor("#08090b") // the offline feed's nav color
-                else if (!onChallenge) injectBridge()
+                else if (!onChallenge) {
+                    injectBridge()
+                    if (hideTopbarNext) web.evaluateJavascript("window.__smolishHideTopbar && window.__smolishHideTopbar()", null)
+                }
+                hideTopbarNext = false
             }
             onPageReady()
         }
@@ -472,7 +482,12 @@ class MainActivity : ComponentActivity() {
             // no feed check on purpose: the site may give every video its own url
             if (loading || soundRefreshQueued || !splashHidden || !resumed || customView != null) return false
             soundRefreshQueued = true
-            runOnUiThread { reloadWithLoader() }
+            runOnUiThread {
+                // the site doesn't show the Smols/Friends bar this deep into the feed, so keep it
+                // hidden on the reloaded page too, or the jump would give the reload away
+                hideTopbarNext = true
+                reloadWithLoader(seamless = SettingsActivity.isSeamless(this@MainActivity))
+            }
             return true
         }
 
@@ -557,8 +572,8 @@ class MainActivity : ComponentActivity() {
 
     private fun retry() = reloadWithLoader()
 
-    private fun reloadWithLoader() {
-        showLoader {
+    private fun reloadWithLoader(seamless: Boolean = false) {
+        showLoader(seamless) {
             errorView.isVisible = false
             if (web.url == null) web.loadUrl(HOME) else web.reload()
         }
@@ -569,7 +584,7 @@ class MainActivity : ComponentActivity() {
      * site's menus stay exactly where they were, no blur), bounces the cube on top of it, then
      * runs [then], e.g. the reload. Hidden again by [onPageReady].
      */
-    private fun showLoader(then: (() -> Unit)? = null) {
+    private fun showLoader(seamless: Boolean = false, then: (() -> Unit)? = null) {
         if (!splashHidden || loading) {
             then?.invoke()
             return
@@ -588,10 +603,16 @@ class MainActivity : ComponentActivity() {
                 splash.animate().cancel()
                 freeze.alpha = 1f
                 splash.alpha = 1f
+                // a seamless reload still waiting for its video is superseded by this one
+                waitingForVideo = false
+                freeze.removeCallbacks(seamlessTimeout)
                 freeze.isVisible = true
-                splash.background = null // see the frozen screen through it
-                splash.isVisible = true
-                splash.startLoader()
+                seamlessLoad = seamless
+                if (!seamless) {
+                    splash.background = null // see the frozen screen through it
+                    splash.isVisible = true
+                    splash.startLoader()
+                }
                 loaderShownAt = SystemClock.uptimeMillis()
             }
             if (frozen !== shot) shot.recycle()
@@ -602,6 +623,13 @@ class MainActivity : ComponentActivity() {
     private fun hideLoader() {
         if (!loading) return
         loading = false
+        if (seamlessLoad) {
+            // keep the frozen frame until the new page's video really plays, then swap instantly,
+            // like the video just hitched for a moment. never wait more than a few seconds.
+            waitingForVideo = true
+            freeze.postDelayed(seamlessTimeout, 5000)
+            return
+        }
         val wait = (LOADER_MIN_MS - (SystemClock.uptimeMillis() - loaderShownAt)).coerceAtLeast(0)
         splash.animate().alpha(0f).setStartDelay(wait).setDuration(250)
         freeze.animate().alpha(0f).setStartDelay(wait).setDuration(250).withEndAction {
@@ -612,6 +640,17 @@ class MainActivity : ComponentActivity() {
             frozen?.recycle()
             frozen = null
         }
+    }
+
+    private fun finishHide() {
+        if (!waitingForVideo) return
+        waitingForVideo = false
+        seamlessLoad = false
+        freeze.removeCallbacks(seamlessTimeout)
+        freeze.isVisible = false
+        freeze.setImageDrawable(null)
+        frozen?.recycle()
+        frozen = null
     }
 
     private fun onPageReady() {
@@ -659,6 +698,7 @@ class MainActivity : ComponentActivity() {
 
     private fun setVideoPlaying(playing: Boolean) {
         videoPlaying = playing
+        if (playing && waitingForVideo) finishHide()
         if (playing) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         else window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         setPictureInPictureParams(pipParams())

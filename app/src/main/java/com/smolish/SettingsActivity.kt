@@ -33,6 +33,10 @@ import kotlin.concurrent.thread
 /** Opened from the launcher icon's long-press menu. Right now it's all about offline mode. */
 class SettingsActivity : ComponentActivity() {
 
+    companion object {
+        fun isSeamless(ctx: android.content.Context) = ctx.getSharedPreferences("app", 0).getBoolean("seamless", false)
+    }
+
     private lateinit var countLabel: TextView
     private lateinit var count: SeekBar
     private lateinit var prepare: Button
@@ -80,6 +84,10 @@ class SettingsActivity : ComponentActivity() {
         findViewById<Button>(R.id.delete).setOnClickListener {
             OfflineStore.clear(this)
             showSaved()
+        }
+        findViewById<Switch>(R.id.seamless).apply {
+            isChecked = isSeamless(this@SettingsActivity)
+            setOnCheckedChangeListener { _, on -> getSharedPreferences("app", 0).edit().putBoolean("seamless", on).apply() }
         }
         findViewById<Switch>(R.id.forced).apply {
             isChecked = OfflineStore.isForced(this@SettingsActivity)
