@@ -411,7 +411,8 @@ class MainActivity : ComponentActivity() {
          */
         @JavascriptInterface
         fun refreshForSound(): Boolean {
-            if (!onFeed || loading || soundRefreshQueued || !splashHidden || !resumed || customView != null) return false
+            // no feed check on purpose: the site may give every video its own url
+            if (loading || soundRefreshQueued || !splashHidden || !resumed || customView != null) return false
             soundRefreshQueued = true
             runOnUiThread { reloadWithLoader() }
             return true

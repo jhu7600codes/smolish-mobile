@@ -87,12 +87,20 @@
   // glitching, a fresh page load fixes it. count the videos that start playing; when the 4th one
   // starts (3 watched) the app reloads behind the cube loader, and we stop that video right away
   // so it doesn't play sound or draw frames before the screen gets frozen.
-  var started = 0, lastVideo = null;
+  // a video is identified by element + how many times it loaded a source, not by its url:
+  // streamed videos (MediaSource via srcObject) have no url at all, and feeds often recycle a
+  // few <video> elements for every clip
+  var started = 0, lastVideo = null, ids = 0;
+  document.addEventListener('loadstart', function (e) {
+    var v = e.target;
+    if (v instanceof HTMLVideoElement) v.__smolishLoads = (v.__smolishLoads || 0) + 1;
+  }, true);
   document.addEventListener('play', function (e) {
     var v = e.target;
     if (!(v instanceof HTMLVideoElement)) return;
-    var key = v.currentSrc || v.src;
-    if (!key || key === lastVideo) return;
+    if (!v.__smolishId) v.__smolishId = ++ids;
+    var key = v.__smolishId + ':' + (v.__smolishLoads || 0) + ':' + (v.currentSrc || v.src || '');
+    if (key === lastVideo) return; // same clip resumed or looping
     lastVideo = key;
     if (++started > 3 && B.refreshForSound()) {
       v.muted = true;
