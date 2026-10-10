@@ -333,6 +333,61 @@
                         android:text="@string/test_splash"
                         android:textAllCaps="false" />
                 </LinearLayout>
+
+                <Switch
+                    android:id="@+id/dev_welcome"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:text="@string/dev_welcome"
+                    android:textColor="@color/text"
+                    android:textSize="16sp"
+                    android:thumbTint="@color/brand" />
+
+                <Button
+                    android:id="@+id/dev_welcome_now"
+                    style="@android:style/Widget.Material.Button.Borderless.Colored"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="-12dp"
+                    android:text="@string/dev_welcome_now"
+                    android:textAllCaps="false" />
+
+                <TextView
+                    android:id="@+id/crash"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:background="#FF16181E"
+                    android:fontFamily="monospace"
+                    android:maxLines="14"
+                    android:padding="10dp"
+                    android:textColor="@color/text_dim"
+                    android:textIsSelectable="true"
+                    android:textSize="11sp" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="-12dp"
+                    android:orientation="horizontal">
+
+                    <Button
+                        android:id="@+id/crash_copy"
+                        style="@android:style/Widget.Material.Button.Borderless.Colored"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/crash_copy"
+                        android:textAllCaps="false" />
+
+                    <Button
+                        android:id="@+id/crash_clear"
+                        style="@android:style/Widget.Material.Button.Borderless.Colored"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/crash_clear"
+                        android:textAllCaps="false" />
+                </LinearLayout>
             </LinearLayout>
         </LinearLayout>
     </ScrollView>

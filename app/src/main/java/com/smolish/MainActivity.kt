@@ -87,6 +87,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private lateinit var web: WebView
+    private var webGone = false // its renderer died, the screen is being recreated
     private lateinit var refresh: SwipeRefreshLayout
     private lateinit var errorView: View
     private lateinit var fullscreen: FrameLayout
@@ -192,6 +193,7 @@ class MainActivity : ComponentActivity() {
         onBackPressedDispatcher.addCallback(this, backHandler)
 
         Notify.createChannel(this)
+        CrashLog.install(this)
         NotifyService.start(this)
         val openUrl = intent?.getStringExtra(Notify.EXTRA_URL)
         if (intent?.action == ACTION_OFFLINE) {
@@ -337,13 +339,23 @@ class MainActivity : ComponentActivity() {
         val last = getSharedPreferences("app", 0).getInt("last_unread", -1)
         web.evaluateJavascript("window.__smolishLastUnread = $last;", null)
         web.evaluateJavascript(bridgeJs, null)
-        // the page checks for notifications itself only while the background service isn't doing it
-        if (!NotifyService.running) web.evaluateJavascript(pollJs, null)
+        // the page checks for notifications while it's on screen (the background service takes over when it's not)
+        web.evaluateJavascript(pollJs, null)
         // only smolish itself, not the login pages of google & co
         if (Translator.isOn(this) && isOurHost(web.url?.let { Uri.parse(it).host })) web.evaluateJavascript(translateJs, null)
     }
 
     private inner class Client : WebViewClient() {
+        // android killed the page's renderer (usually low memory). without handling this the whole
+        // app would crash; instead throw this webview away and start the screen fresh
+        override fun onRenderProcessGone(view: WebView, detail: android.webkit.RenderProcessGoneDetail): Boolean {
+            webGone = true
+            (view.parent as? android.view.ViewGroup)?.removeView(view)
+            runCatching { view.destroy() }
+            recreate()
+            return true
+        }
+
         override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? =
             if (request.url.host == OfflineStore.HOST) OfflineStore.serve(this@MainActivity, request) else null
 
@@ -472,6 +484,11 @@ class MainActivity : ComponentActivity() {
 
     /** Popups only show login pages and smolish itself; other links (target=_blank etc) go to the browser. */
     private inner class PopupClient : WebViewClient() {
+        override fun onRenderProcessGone(view: WebView, detail: android.webkit.RenderProcessGoneDetail): Boolean {
+            closePopup()
+            return true
+        }
+
         override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
             val uri = request.url
             if (!request.isForMainFrame || (isHttp(uri) && (isOurHost(uri.host) || isAuthPage(uri)))) return false
@@ -547,7 +564,7 @@ class MainActivity : ComponentActivity() {
         /** The unread count went up: show it as a real notification if you're not in the app. */
         @JavascriptInterface
         fun onNotification(count: Int, who: String, what: String) {
-            if (resumed || NotifyService.running) return // you're looking at the site / the service does it
+            if (resumed || NotifyService.running) return // you're looking at the site / the service handles the background
             Notify.show(this@MainActivity, count, who, what)
         }
 
@@ -763,7 +780,8 @@ class MainActivity : ComponentActivity() {
             splash.stop()
             splash.isVisible = false
             // first launch: Smol's welcome (language, birthday, region, translation, notifications)
-            if (!Icons.setupDone(this)) startActivity(Intent(this, WelcomeActivity::class.java))
+            val devWelcome = Icons.isDev(this) && getSharedPreferences("app", 0).getBoolean("dev_welcome", false)
+            if (!Icons.setupDone(this) || devWelcome) startActivity(Intent(this, WelcomeActivity::class.java))
             else web.postDelayed({ maybeAskNotifications() }, 1500)
         }
     }
@@ -825,20 +843,20 @@ class MainActivity : ComponentActivity() {
             if (splashHidden && !inOffline()) reloadWithLoader(seamless = false)
         }
         resumed = true
-        inFront = true
         web.onResume()
     }
 
     override fun onPause() {
         super.onPause()
         resumed = false
-        inFront = false
         CookieManager.getInstance().flush() // keep the login if the app gets killed
         if (!isInPictureInPictureMode) web.onPause()
     }
 
     override fun onStart() {
         super.onStart()
+        inFront = true
+        NotifyService.appVisible(true) // our page checks now, the hidden one goes away
         watchNetwork()
     }
 
@@ -848,6 +866,8 @@ class MainActivity : ComponentActivity() {
         network?.let { getSystemService(ConnectivityManager::class.java)?.unregisterNetworkCallback(it) }
         network = null
         super.onStop()
+        inFront = false
+        NotifyService.appVisible(false)
         // also covers closing the pip window
         web.evaluateJavascript("document.querySelectorAll('video').forEach(function(v){v.pause()})", null)
         web.onPause()
@@ -855,13 +875,13 @@ class MainActivity : ComponentActivity() {
 
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
-        web.saveState(outState)
+        if (!webGone) web.saveState(outState)
     }
 
     override fun onDestroy() {
         fileCallback?.onReceiveValue(null)
         closePopup()
-        web.destroy()
+        if (!webGone) web.destroy()
         super.onDestroy()
     }
 

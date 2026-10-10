@@ -152,6 +152,21 @@ class SettingsActivity : ComponentActivity() {
         findViewById<Button>(R.id.test_splash).setOnClickListener {
             startActivity(Intent(this, SplashTestActivity::class.java).putExtra(SplashTestActivity.EXTRA_KEY, Icons.KEYS[spinner.selectedItemPosition]))
         }
+        findViewById<Switch>(R.id.dev_welcome).apply {
+            isChecked = getSharedPreferences("app", 0).getBoolean("dev_welcome", false)
+            setOnCheckedChangeListener { _, on -> getSharedPreferences("app", 0).edit().putBoolean("dev_welcome", on).apply() }
+        }
+        findViewById<Button>(R.id.dev_welcome_now).setOnClickListener { startActivity(Intent(this, WelcomeActivity::class.java)) }
+        val crash = findViewById<TextView>(R.id.crash)
+        fun showCrash() { crash.text = CrashLog.read(this) ?: getString(R.string.crash_none) }
+        showCrash()
+        findViewById<Button>(R.id.crash_copy).setOnClickListener {
+            val log = CrashLog.read(this) ?: return@setOnClickListener
+            getSystemService(android.content.ClipboardManager::class.java)
+                .setPrimaryClip(android.content.ClipData.newPlainText("Smolish crash", log))
+            android.widget.Toast.makeText(this, R.string.crash_copied, android.widget.Toast.LENGTH_SHORT).show()
+        }
+        findViewById<Button>(R.id.crash_clear).setOnClickListener { CrashLog.clear(this); showCrash() }
     }
 
     private fun showCount() {

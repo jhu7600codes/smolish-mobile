@@ -78,6 +78,12 @@
     <string name="dev_section">Developer</string>
     <string name="dev_explain">Only you see this, @jhu. Plays a holiday\'s launch: the system splash, then the intro. Tap to replay, back to leave.</string>
     <string name="test_splash">Test splash</string>
+    <string name="dev_welcome">Show Smol\'s welcome on every launch</string>
+    <string name="dev_welcome_now">Run the welcome now</string>
+    <string name="crash_none">No crashes saved. Nice.</string>
+    <string name="crash_copy">Copy crash log</string>
+    <string name="crash_clear">Clear</string>
+    <string name="crash_copied">Copied</string>
     <string name="sleep_title">Smolish is taking a nap</string>
     <string name="sleep_body">Your internet works, but Smolish isn\'t answering right now. Try again in a bit.</string>
     <string name="search_title">No internet</string>

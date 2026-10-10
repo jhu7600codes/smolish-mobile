@@ -24,7 +24,8 @@ import androidx.core.content.ContextCompat
  * Background notifications that survive closing the app: a foreground service (so android keeps
  * it alive, with a quiet pinned notification) that keeps smolish.com open in a hidden webview and
  * asks the site's own unread counter every minute. The webview is needed because the site signs
- * its api requests in its own javascript.
+ * its api requests in its own javascript. It only exists while the app is NOT on screen (the app's
+ * own page checks then), so there are never two smolish pages eating memory at once.
  */
 class NotifyService : Service() {
 
@@ -43,6 +44,13 @@ class NotifyService : Service() {
             if (on) start(ctx) else ctx.stopService(Intent(ctx, NotifyService::class.java))
         }
 
+        private var instance: NotifyService? = null
+
+        /** The app came to / left the screen: hand the checking over. Main thread. */
+        fun appVisible(visible: Boolean) {
+            instance?.onAppVisible(visible)
+        }
+
         fun start(ctx: Context) {
             if (!isEnabled(ctx) || running) return
             runCatching { ContextCompat.startForegroundService(ctx, Intent(ctx, NotifyService::class.java)) }
@@ -59,6 +67,8 @@ class NotifyService : Service() {
     override fun onCreate() {
         super.onCreate()
         running = true
+        instance = this
+        CrashLog.install(this)
         val ch = NotificationChannel(CHANNEL, getString(R.string.bg_channel), NotificationManager.IMPORTANCE_MIN)
             .apply { setShowBadge(false) }
         getSystemService(NotificationManager::class.java).createNotificationChannel(ch)
@@ -73,9 +83,27 @@ class NotifyService : Service() {
             .setOngoing(true)
             .setContentIntent(open)
             .build()
-        ServiceCompat.startForeground(this, ID, n,
-            if (Build.VERSION.SDK_INT >= 34) ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE else 0)
-        load()
+        try {
+            ServiceCompat.startForeground(this, ID, n,
+                if (Build.VERSION.SDK_INT >= 34) ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE else 0)
+        } catch (e: Exception) {
+            // the system refused (rom restrictions etc): note it for settings and stay out of the way
+            CrashLog.note(this, "Background notifications couldn't start:\n${e.stackTraceToString()}")
+            stopSelf()
+            return
+        }
+        if (!MainActivity.inFront) handler.postDelayed(::load, 5_000)
+    }
+
+    private fun onAppVisible(visible: Boolean) {
+        handler.removeCallbacksAndMessages(null)
+        if (visible) unload() else handler.postDelayed(::load, 3_000) // let the app settle first
+    }
+
+    private fun unload() {
+        ready = false
+        web?.let { runCatching { it.stopLoading(); it.destroy() } }
+        web = null
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int) = START_STICKY
@@ -83,8 +111,8 @@ class NotifyService : Service() {
     @SuppressLint("SetJavaScriptEnabled")
     private fun load() {
         handler.removeCallbacksAndMessages(null)
-        ready = false
-        web?.destroy()
+        if (MainActivity.inFront) return unload()
+        unload()
         web = WebView(applicationContext).apply {
             settings.javaScriptEnabled = true
             settings.domStorageEnabled = true
@@ -92,6 +120,18 @@ class NotifyService : Service() {
             settings.blockNetworkImage = true // it only needs the page's scripts
             addJavascriptInterface(Bridge(), "SmolishNotify")
             webViewClient = object : WebViewClient() {
+                // the page's renderer died (low memory): without this android kills the whole app
+                override fun onRenderProcessGone(view: WebView, detail: android.webkit.RenderProcessGoneDetail): Boolean {
+                    if (view == web) {
+                        web = null
+                        ready = false
+                        handler.removeCallbacksAndMessages(null)
+                        handler.postDelayed(::load, 60_000)
+                    }
+                    runCatching { view.destroy() }
+                    return true
+                }
+
                 override fun onPageFinished(view: WebView, url: String?) {
                     // give the site's scripts a moment, and skip cloudflare's check page (no next.js there)
                     handler.postDelayed({
@@ -109,17 +149,24 @@ class NotifyService : Service() {
         handler.postDelayed(::load, RELOAD_MS)
     }
 
+    private var notReadyPolls = 0
+
     private fun poll() {
-        if (ready) web?.evaluateJavascript("window.__smolishCheckNotifs && window.__smolishCheckNotifs()", null)
-        else handler.postDelayed({ if (!ready) load() }, 5 * 60_000L) // check page or no internet: try again later
+        if (ready) {
+            notReadyPolls = 0
+            web?.evaluateJavascript("window.__smolishCheckNotifs && window.__smolishCheckNotifs()", null)
+        } else if (++notReadyPolls >= 5) { // check page or no internet for 5 minutes: fresh page
+            notReadyPolls = 0
+            return load()
+        }
         handler.postDelayed(::poll, POLL_MS)
     }
 
     override fun onDestroy() {
         running = false
+        if (instance == this) instance = null
         handler.removeCallbacksAndMessages(null)
-        web?.destroy()
-        web = null
+        unload()
         super.onDestroy()
     }
 
