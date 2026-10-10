@@ -180,6 +180,15 @@
       B.onNotification(n, who, what);
     } catch (e) {}
   }
+  // who's logged in (the app only uses it to show developer tools to @jhu)
+  setTimeout(async function () {
+    try {
+      var r = await fetch('/api/profile');
+      var j = r.ok ? await r.json() : null;
+      B.onAccount(j ? pickPath(j, ['handle', 'profile.handle', 'user.handle', 'username', 'user.username', 'profile.username']) : '');
+    } catch (e) {}
+  }, 4000);
+
   setTimeout(checkNotifs, 3000);
   setInterval(checkNotifs, 60000);
 

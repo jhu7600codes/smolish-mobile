@@ -66,6 +66,9 @@
         <item>Eid</item>
         <item>Maslenitsa</item>
     </string-array>
+    <string name="dev_section">Developer</string>
+    <string name="dev_explain">Only you see this, @jhu. Plays a holiday\'s launch: the system splash, then the intro. Tap to replay, back to leave.</string>
+    <string name="test_splash">Test splash</string>
     <string name="sleep_title">Smolish is taking a nap</string>
     <string name="sleep_body">Your internet works, but Smolish isn\'t answering right now. Try again in a bit.</string>
     <string name="search_title">No internet</string>

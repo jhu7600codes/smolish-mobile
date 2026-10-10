@@ -108,6 +108,20 @@ object Icons {
         return if (m != AUTO && m in KEYS) m else forDate(LocalDate.now(), region(ctx), birthday(ctx))
     }
 
+    /**
+     * The system splash theme for a holiday. The splash shows the intro's first frame, so only the
+     * holidays with special eyes get their own; hats, hands and particles arrive later in the intro.
+     */
+    fun splashTheme(key: String) = when (key) {
+        "halloween" -> R.style.Theme_Smolish_Starting_Halloween
+        "valentine" -> R.style.Theme_Smolish_Starting_Valentine
+        "aprilfools" -> R.style.Theme_Smolish_Starting_Aprilfools
+        else -> R.style.Theme_Smolish_Starting
+    }
+
+    /** The logged-in smolish handle, saved by bridge.js. Only @jhu gets the developer tools. */
+    fun isDev(ctx: Context) = prefs(ctx).getString("account_handle", "")!!.removePrefix("@").equals("jhu", ignoreCase = true)
+
     private fun alias(ctx: Context, key: String) =
         ComponentName(ctx, "com.smolish.Launcher" + if (key == "default") "" else key.replaceFirstChar { it.uppercase() })
 

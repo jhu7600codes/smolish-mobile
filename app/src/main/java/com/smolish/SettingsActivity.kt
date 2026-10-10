@@ -116,6 +116,22 @@ class SettingsActivity : ComponentActivity() {
             }
         }
         showSaved()
+        setupDev()
+    }
+
+    /** Splash tester, only for the @jhu account. */
+    private fun setupDev() {
+        if (!Icons.isDev(this)) return
+        findViewById<View>(R.id.dev).isVisible = true
+        // the icon names minus "Automatic", same order as Icons.KEYS
+        val names = resources.getStringArray(R.array.icon_modes).drop(1)
+        val spinner = findViewById<Spinner>(R.id.test_key).apply {
+            adapter = ArrayAdapter(this@SettingsActivity, android.R.layout.simple_spinner_dropdown_item, names)
+            setSelection(Icons.KEYS.indexOf(Icons.wanted(this@SettingsActivity)).coerceAtLeast(0))
+        }
+        findViewById<Button>(R.id.test_splash).setOnClickListener {
+            startActivity(Intent(this, SplashTestActivity::class.java).putExtra(SplashTestActivity.EXTRA_KEY, Icons.KEYS[spinner.selectedItemPosition]))
+        }
     }
 
     private fun showCount() {

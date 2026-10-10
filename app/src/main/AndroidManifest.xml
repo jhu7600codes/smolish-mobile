@@ -202,6 +202,11 @@
             android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboard|keyboardHidden" />
 
         <activity
+            android:name=".SplashTestActivity"
+            android:exported="false"
+            android:theme="@style/Theme.Smolish"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboard|keyboardHidden" />
+        <activity
             android:name=".SetupActivity"
             android:exported="false"
             android:label="@string/setup_title"

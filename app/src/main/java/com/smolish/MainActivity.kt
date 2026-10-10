@@ -145,6 +145,8 @@ class MainActivity : ComponentActivity() {
     private val notificationPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) {}
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        // older androids read the splash from the current theme, so pick the holiday one first
+        if (Build.VERSION.SDK_INT < 31) setTheme(Icons.splashTheme(Icons.wanted(this)))
         installSplashScreen() // system splash, dismissed right away; our overlay takes over
         enableEdgeToEdge(SystemBarStyle.dark(Color.TRANSPARENT), SystemBarStyle.dark(Color.TRANSPARENT))
         super.onCreate(savedInstanceState)
@@ -160,6 +162,7 @@ class MainActivity : ComponentActivity() {
         // the intro always plays to the end; "loading" only starts once the cube falls
         splash.onIntroDone = { maybeHideSplash() }
         splash.theme = Icons.wanted(this) // holiday hat / eyes match the launcher icon
+        rememberSplashTheme()
         popupHost = findViewById(R.id.popup_host)
         statusBg = findViewById(R.id.status_bg)
         navBg = findViewById(R.id.nav_bg)
@@ -510,6 +513,11 @@ class MainActivity : ComponentActivity() {
         }
 
         @JavascriptInterface
+        fun onAccount(handle: String) {
+            getSharedPreferences("app", 0).edit().putString("account_handle", handle).apply()
+        }
+
+        @JavascriptInterface
         fun onUnread(count: Int) {
             getSharedPreferences("app", 0).edit().putInt("last_unread", count).apply()
         }
@@ -528,6 +536,14 @@ class MainActivity : ComponentActivity() {
 
         @JavascriptInterface
         fun saveBase64(dataUrl: String, mime: String, name: String) = runOnUiThread { saveDataUrl(dataUrl, mime, name) }
+    }
+
+    /**
+     * Android 13+ draws the system splash before our code runs, from a theme it remembers per app,
+     * so tell it which holiday splash to use next time. (Android 12 can't, it keeps the classic one.)
+     */
+    private fun rememberSplashTheme() {
+        if (Build.VERSION.SDK_INT >= 33) runCatching { splashScreen.setSplashScreenTheme(Icons.splashTheme(Icons.wanted(this))) }
     }
 
     /** Paints the status bar and gesture/nav bar strips with the site's bottom nav color. */
@@ -798,6 +814,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onStop() {
         Icons.apply(this) // seasonal icon, swapped while you're not looking at the launcher
+        rememberSplashTheme()
         network?.let { getSystemService(ConnectivityManager::class.java)?.unregisterNetworkCallback(it) }
         network = null
         super.onStop()
