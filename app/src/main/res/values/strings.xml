@@ -41,7 +41,7 @@
     <string name="setup_no_birthday">I\'d rather not say</string>
     <string name="setup_region">Where do you celebrate?</string>
     <string name="setup_region_sub">Decides which holidays your icon celebrates and on which dates.</string>
-    <string name="region_ru">Russia (Orthodox Easter, New Year)</string>
+    <string name="region_ru">Russia (Maslenitsa, Orthodox Easter, New Year)</string>
     <string name="region_west">Europe (Western Easter, Christmas)</string>
     <string name="region_us">USA (Thanksgiving, Western Easter, Christmas)</string>
     <string name="region_ca">Canada (Thanksgiving, Western Easter, Christmas)</string>
@@ -64,6 +64,7 @@
         <item>Thanksgiving</item>
         <item>Ramadan</item>
         <item>Eid</item>
+        <item>Maslenitsa</item>
     </string-array>
     <string name="sleep_title">Smolish is taking a nap</string>
     <string name="sleep_body">Your internet works, but Smolish isn\'t answering right now. Try again in a bit.</string>

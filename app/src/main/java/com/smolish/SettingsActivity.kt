@@ -89,7 +89,7 @@ class SettingsActivity : ComponentActivity() {
             OfflineStore.clear(this)
             showSaved()
         }
-        val iconKeys = listOf(Icons.AUTO, "default", "halloween", "winter", "valentine", "aprilfools", "easter", "birthday", "thanksgiving", "ramadan", "eid")
+        val iconKeys = listOf(Icons.AUTO, "default", "halloween", "winter", "valentine", "aprilfools", "easter", "birthday", "thanksgiving", "ramadan", "eid", "maslenitsa")
         findViewById<Spinner>(R.id.icon).apply {
             adapter = ArrayAdapter.createFromResource(this@SettingsActivity, R.array.icon_modes, android.R.layout.simple_spinner_dropdown_item)
             setSelection(iconKeys.indexOf(Icons.mode(this@SettingsActivity)).coerceAtLeast(0))

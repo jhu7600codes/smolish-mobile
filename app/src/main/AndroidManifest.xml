@@ -165,6 +165,21 @@
                 android:resource="@xml/shortcuts" />
         </activity-alias>
         <activity-alias
+            android:name=".LauncherMaslenitsa"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_maslenitsa"
+            android:roundIcon="@mipmap/ic_launcher_maslenitsa"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
+        </activity-alias>
+        <activity-alias
             android:name=".LauncherBirthday"
             android:enabled="false"
             android:exported="true"

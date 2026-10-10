@@ -27,7 +27,7 @@ object Decor {
     private const val NIGHT_BLUE = 0xFF5B7BD5.toInt()
     private const val WHITE = 0xFFFFFFFF.toInt()
 
-    fun hasHat(kind: String) = kind in setOf("halloween", "winter", "easter", "birthday", "sleep", "thanksgiving", "ramadan", "eid")
+    fun hasHat(kind: String) = kind in setOf("halloween", "winter", "easter", "birthday", "sleep", "thanksgiving", "ramadan", "eid", "maslenitsa")
     private val path2 = Path()
 
     /** Draws the hat for [kind] with its base at x,y, tilted by [angle] degrees, [u] px per hat unit. */
@@ -66,6 +66,14 @@ object Decor {
                     poly(c, HOT_PINK, -7.5f * (1 - a), -17f * a, 7.5f * (1 - a), -17f * a, 7.5f * (1 - b), -17f * b, -7.5f * (1 - b), -17f * b)
                 }
                 circle(c, 0f, -17f, 2.8f, WHITE)
+            }
+            "maslenitsa" -> { // a stack of blini with a pat of butter
+                for (i in 0 until 3) {
+                    val y0 = -i * 2.6f
+                    oval(c, 0f, y0, 10f, 2.4f, 0xFFC48030.toInt())
+                    oval(c, 0f, y0 - 0.5f, 9.2f, 1.7f, 0xFFF0BE64.toInt())
+                }
+                poly(c, 0xFFFFEC96.toInt(), -2.2f, -6.6f, 2.2f, -6.6f, 2.2f, -8.4f, -2.2f, -8.4f)
             }
             "thanksgiving" -> { // pilgrim hat with a gold buckle
                 oval(c, 0f, 0f, 11f, 2.4f, 0xFF3A3A42.toInt())

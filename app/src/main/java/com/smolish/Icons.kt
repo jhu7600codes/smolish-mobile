@@ -17,10 +17,10 @@ import java.time.MonthDay
 object Icons {
     const val AUTO = "auto"
     val KEYS = listOf("default", "halloween", "winter", "valentine", "aprilfools", "easter", "birthday",
-        "thanksgiving", "ramadan", "eid")
+        "thanksgiving", "ramadan", "eid", "maslenitsa")
 
     // where you celebrate: decides which holidays show up and on which dates
-    const val RUSSIA = "ru"        // orthodox easter, new year dec 20 - jan 14 (covers orthodox christmas jan 7)
+    const val RUSSIA = "ru"        // maslenitsa, orthodox easter, new year dec 20 - jan 14 (covers orthodox christmas jan 7)
     const val WESTERN = "west"     // europe: western easter, christmas dec 10 - jan 6
     const val USA = "us"           // like europe + thanksgiving (4th thursday of november)
     const val CANADA = "ca"        // like europe + thanksgiving (2nd monday of october)
@@ -59,6 +59,11 @@ object Icons {
             if (hm == 12 && hd in 10..13) return "eid"             // eid al-adha
         }
         thanksgiving(d.year, region)?.let { (from, to) -> if (!d.isBefore(from) && !d.isAfter(to)) return "thanksgiving" }
+        if (region == RUSSIA) easter(d.year, region)?.let { e ->
+            // maslenitsa: the week that ends 49 days before orthodox easter (no lent after it, on purpose)
+            val sunday = e.minusDays(49)
+            if (!d.isBefore(sunday.minusDays(6)) && !d.isAfter(sunday)) return "maslenitsa"
+        }
         easter(d.year, region)?.let { e ->
             if (!d.isBefore(e.minusDays(3)) && !d.isAfter(e.plusDays(1))) return "easter"
         }
