@@ -40,8 +40,11 @@ object Icons {
     fun setBirthday(ctx: Context, md: MonthDay?) =
         prefs(ctx).edit().putString("birthday", md?.toString()?.removePrefix("--")).apply()
 
-    fun setupDone(ctx: Context) = prefs(ctx).getBoolean("setup_done", false)
-    fun setSetupDone(ctx: Context) = prefs(ctx).edit().putBoolean("setup_done", true).apply()
+    // bump when the welcome asks something new, so everyone goes through it again
+    // (2: language, translation and notifications were added)
+    private const val SETUP_VERSION = 2
+    fun setupDone(ctx: Context) = prefs(ctx).getInt("setup_version", 0) >= SETUP_VERSION
+    fun setSetupDone(ctx: Context) = prefs(ctx).edit().putInt("setup_version", SETUP_VERSION).apply()
 
     /** Which icon a date gets. Birthday beats everything, then april fools, then the holidays. */
     fun forDate(d: LocalDate, region: String, birthday: MonthDay?): String {
