@@ -21,6 +21,7 @@ import android.os.Looper
 import android.os.SystemClock
 import android.view.PixelCopy
 import android.widget.ImageView
+import android.widget.TextView
 import kotlin.math.max
 import android.util.Base64
 import android.util.Rational
@@ -88,6 +89,7 @@ class MainActivity : ComponentActivity() {
     private lateinit var fullscreen: FrameLayout
     private lateinit var splash: BouncingSplashView
     private lateinit var freeze: ImageView
+    private lateinit var cube: OfflineCubeView
     private lateinit var popupHost: FrameLayout
     private lateinit var statusBg: View
     private lateinit var navBg: View
@@ -154,6 +156,7 @@ class MainActivity : ComponentActivity() {
         fullscreen = findViewById(R.id.fullscreen)
         splash = findViewById(R.id.splash)
         freeze = findViewById(R.id.freeze)
+        cube = findViewById(R.id.cube)
         // the intro always plays to the end; "loading" only starts once the cube falls
         splash.onIntroDone = { maybeHideSplash() }
         popupHost = findViewById(R.id.popup_host)
@@ -267,8 +270,8 @@ class MainActivity : ComponentActivity() {
     private fun shouldBeOffline() = offlineByChoice || OfflineStore.isForced(this) ||
         (!OfflineStore.isOnline(this) && OfflineStore.canUse(this))
 
-    private fun goOffline() = showLoader { errorView.isVisible = false; web.loadUrl(OfflineStore.URL) }
-    private fun goOnline() = showLoader { errorView.isVisible = false; web.loadUrl(HOME) }
+    private fun goOffline() = showLoader { hideError(); web.loadUrl(OfflineStore.URL) }
+    private fun goOnline() = showLoader { hideError(); web.loadUrl(HOME) }
 
     // follow the connection: lose it -> offline feed (if there's a pack), get it back -> the site
     private fun watchNetwork() {
@@ -276,6 +279,8 @@ class MainActivity : ComponentActivity() {
         val cb = object : ConnectivityManager.NetworkCallback() {
             override fun onCapabilitiesChanged(n: Network, caps: NetworkCapabilities) {
                 if (caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)) runOnUiThread {
+                    // the flashlight cube found wifi: show it off, then load the site again
+                    if (errorView.isVisible && cube.mode == OfflineCubeView.Mode.SEARCH) cube.foundWifi { reloadWithLoader() }
                     if (inOffline() && !offlineByChoice && !OfflineStore.isForced(this@MainActivity)) goOnline()
                 }
             }
@@ -346,7 +351,7 @@ class MainActivity : ComponentActivity() {
         override fun onPageFinished(view: WebView, url: String?) {
             refresh.isRefreshing = false
             if (!loadFailed) {
-                errorView.isVisible = false
+                hideError()
                 if (inOffline()) setBarColor("#08090b") // the offline feed's nav color
                 else if (!onChallenge) {
                     injectBridge()
@@ -374,7 +379,7 @@ class MainActivity : ComponentActivity() {
             }
             loadFailed = true
             refresh.isRefreshing = false
-            errorView.isVisible = true
+            showError()
             onPageReady()
         }
     }
@@ -573,11 +578,28 @@ class MainActivity : ComponentActivity() {
         customViewCallback = null
     }
 
-    private fun retry() = reloadWithLoader()
+    /** Site down but internet fine -> the cube naps. No internet at all -> it searches with a flashlight. */
+    private fun showError() {
+        val online = OfflineStore.isOnline(this)
+        cube.setMode(if (online) OfflineCubeView.Mode.SLEEP else OfflineCubeView.Mode.SEARCH)
+        findViewById<TextView>(R.id.error_title).setText(if (online) R.string.sleep_title else R.string.search_title)
+        findViewById<TextView>(R.id.error_body).setText(if (online) R.string.sleep_body else R.string.search_body)
+        errorView.isVisible = true
+    }
+
+    private fun hideError() {
+        errorView.isVisible = false
+        cube.setMode(OfflineCubeView.Mode.NONE)
+    }
+
+    // the sleeping cube wakes up and hops first, then we reload
+    private fun retry() {
+        if (cube.mode == OfflineCubeView.Mode.SLEEP) cube.wakeUp { reloadWithLoader() } else reloadWithLoader()
+    }
 
     private fun reloadWithLoader(seamless: Boolean = false) {
         showLoader(seamless) {
-            errorView.isVisible = false
+            hideError()
             if (web.url == null) web.loadUrl(HOME) else web.reload()
         }
     }

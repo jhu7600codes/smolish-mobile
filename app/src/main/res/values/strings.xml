@@ -59,4 +59,8 @@
         <item>Easter</item>
         <item>Birthday</item>
     </string-array>
+    <string name="sleep_title">Smolish is taking a nap</string>
+    <string name="sleep_body">Your internet works, but Smolish isn\'t answering right now. Try again in a bit.</string>
+    <string name="search_title">No internet</string>
+    <string name="search_body">Shake your phone to charge the flashlight while the cube looks for wifi.</string>
 </resources>

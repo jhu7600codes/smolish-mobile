@@ -33,23 +33,24 @@
             android:padding="32dp"
             android:visibility="gone">
 
-            <ImageView
-                android:layout_width="72dp"
-                android:layout_height="72dp"
-                android:alpha="0.5"
-                android:contentDescription="@null"
-                android:src="@drawable/splash_logo" />
+            <!-- sleeping cube (site down) or flashlight cube (no internet) -->
+            <com.smolish.OfflineCubeView
+                android:id="@+id/cube"
+                android:layout_width="match_parent"
+                android:layout_height="320dp" />
 
             <TextView
+                android:id="@+id/error_title"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="24dp"
+                android:layout_marginTop="8dp"
                 android:text="@string/offline_title"
                 android:textColor="@color/text"
                 android:textSize="20sp"
                 android:textStyle="bold" />
 
             <TextView
+                android:id="@+id/error_body"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp"
