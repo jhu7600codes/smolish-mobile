@@ -13,6 +13,11 @@ import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import android.util.Base64
+import org.json.JSONObject
+import java.net.HttpURLConnection
+import java.net.URL
+import kotlin.concurrent.thread
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -21,7 +26,10 @@ import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
 
 /**
- * Background notifications that survive closing the app: a foreground service (so android keeps
+ * Background notifications that survive closing the app. Two ways:
+ * - web push (when you turned on push in smolish's own settings): a connection to the private
+ *   ntfy.sh topic smolish's server pushes to, decrypted with WebPush. Instant and light.
+ * - otherwise polling: a foreground service (so android keeps
  * it alive, with a quiet pinned notification) that keeps smolish.com open in a hidden webview and
  * asks the site's own unread counter every minute. The webview is needed because the site signs
  * its api requests in its own javascript. It only exists while the app is NOT on screen (the app's
@@ -49,6 +57,13 @@ class NotifyService : Service() {
         /** The app came to / left the screen: hand the checking over. Main thread. */
         fun appVisible(visible: Boolean) {
             instance?.onAppVisible(visible)
+        }
+
+        /** Push got turned on/off on the site: switch between push and polling. */
+        fun restart(ctx: Context) {
+            instance?.stopSelf()
+            running = false
+            Handler(Looper.getMainLooper()).postDelayed({ start(ctx) }, 500)
         }
 
         fun start(ctx: Context) {
@@ -92,10 +107,66 @@ class NotifyService : Service() {
             stopSelf()
             return
         }
-        if (!MainActivity.inFront) mainHandler.postDelayed(::load, 5_000)
+        if (WebPush.isActive(this)) listen()
+        else if (!MainActivity.inFront) mainHandler.postDelayed(::load, 5_000)
+    }
+
+    // --- web push through ntfy.sh
+    @Volatile private var listening = false
+    @Volatile private var conn: HttpURLConnection? = null
+
+    private fun listen() {
+        listening = true
+        thread(name = "ntfy") {
+            var backoff = 2_000L
+            while (listening) {
+                val topic = WebPush.topic(this) ?: break
+                try {
+                    val since = WebPush.lastId(this)?.let { "?since=$it" } ?: ""
+                    val c = URL("${WebPush.NTFY}/$topic/json$since").openConnection() as HttpURLConnection
+                    conn = c
+                    // ntfy only accepts pushes for "up..." topics while their subscriber says so
+                    c.setRequestProperty("Rate-Topics", topic)
+                    c.connectTimeout = 15_000
+                    c.readTimeout = 120_000 // ntfy sends a keepalive every 45s
+                    c.inputStream.bufferedReader().useLines { lines ->
+                        backoff = 2_000L
+                        for (line in lines) {
+                            if (!listening) break
+                            val j = runCatching { JSONObject(line) }.getOrNull() ?: continue
+                            if (j.optString("event") != "message") continue
+                            onPush(j)
+                            WebPush.setLastId(this, j.getString("id"))
+                        }
+                    }
+                } catch (_: Exception) {
+                }
+                if (listening) {
+                    Thread.sleep(backoff)
+                    backoff = minOf(backoff * 2, 60_000L)
+                }
+            }
+        }
+    }
+
+    private fun onPush(j: JSONObject) {
+        val raw = j.optString("message")
+        val bytes = if (j.optString("encoding") == "base64") Base64.decode(raw, Base64.DEFAULT) else raw.toByteArray()
+        val text = WebPush.decrypt(this, bytes) ?: return
+        val p = runCatching { JSONObject(text) }.getOrNull()
+        val title = p?.optString("title")?.ifBlank { null } ?: getString(R.string.app_name)
+        val body = p?.optString("body") ?: text
+        val url = p?.optString("url") ?: "/"
+        val tag = p?.optString("tag")?.ifBlank { null }
+        if (Translator.isOn(this) && body.isNotBlank()) {
+            Translator.translate(listOf(title, body), Translator.lang(this)) { out ->
+                Notify.showPush(this, out?.getOrNull(0) ?: title, out?.getOrNull(1) ?: body, url, tag)
+            }
+        } else Notify.showPush(this, title, body, url, tag)
     }
 
     private fun onAppVisible(visible: Boolean) {
+        if (listening) return // push doesn't care whether the app is open
         mainHandler.removeCallbacksAndMessages(null)
         if (visible) unload() else mainHandler.postDelayed(::load, 3_000) // let the app settle first
     }
@@ -164,6 +235,8 @@ class NotifyService : Service() {
 
     override fun onDestroy() {
         running = false
+        listening = false
+        thread { runCatching { conn?.disconnect() } }
         if (instance == this) instance = null
         mainHandler.removeCallbacksAndMessages(null)
         unload()

@@ -23,6 +23,36 @@ object Notify {
         ctx.getSystemService(NotificationManager::class.java).createNotificationChannel(ch)
     }
 
+    private var nextId = 100
+
+    /** A push from smolish's server ({title, body, url, tag}, see the site's sw.js). */
+    fun showPush(ctx: Context, title: String, body: String, url: String, tag: String?) {
+        if (Build.VERSION.SDK_INT >= 33 &&
+            ContextCompat.checkSelfPermission(ctx, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) return
+        val target = when {
+            url.startsWith("https://smolish.com") -> url
+            url.startsWith("/") -> "https://smolish.com$url"
+            else -> "https://smolish.com/notifications"
+        }
+        // same tag = replaces the old one (like the site's renotify), otherwise each push is its own
+        val id = tag?.takeIf { it.isNotBlank() }?.hashCode() ?: nextId++
+        val open = Intent(ctx, MainActivity::class.java)
+            .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            .putExtra(EXTRA_URL, target)
+        val pi = PendingIntent.getActivity(ctx, id, open, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        val n = NotificationCompat.Builder(ctx, CHANNEL)
+            .setSmallIcon(R.drawable.ic_cube)
+            .setColor(ContextCompat.getColor(ctx, R.color.brand))
+            .setContentTitle(title.ifBlank { ctx.getString(R.string.app_name) })
+            .setContentText(body)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+            .setAutoCancel(true)
+            .setContentIntent(pi)
+            .build()
+        runCatching { NotificationManagerCompat.from(ctx).notify(id, n) }
+    }
+
     fun show(ctx: Context, count: Int, who: String, what: String) {
         if (Build.VERSION.SDK_INT >= 33 &&
             ContextCompat.checkSelfPermission(ctx, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED

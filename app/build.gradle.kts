@@ -40,4 +40,6 @@ dependencies {
     implementation(libs.androidx.activity)
     implementation(libs.androidx.splashscreen)
     implementation(libs.androidx.swiperefresh)
+    implementation(libs.androidx.webkit)
+    testImplementation("junit:junit:4.13.2")
 }

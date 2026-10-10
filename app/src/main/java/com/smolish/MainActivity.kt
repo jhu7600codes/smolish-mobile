@@ -47,6 +47,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import androidx.core.content.edit
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.webkit.WebViewCompat
+import androidx.webkit.WebViewFeature
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -149,7 +151,23 @@ class MainActivity : ComponentActivity() {
         pendingStorageAction = null
     }
 
-    private val notificationPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) {}
+    private val notificationPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
+        if (!ok) getSharedPreferences("app", 0).edit { putBoolean("notif_denied", true) }
+        // the site may be waiting on Notification.requestPermission() (push_shim.js)
+        web.evaluateJavascript("window.__smolishPermResult && window.__smolishPermResult('${notifPermission()}')", null)
+    }
+
+    /** Android's notification permission in web terms: granted / denied / default (not asked yet). */
+    private fun notifPermission(): String {
+        val granted = Build.VERSION.SDK_INT < 33 ||
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+        return when {
+            granted && androidx.core.app.NotificationManagerCompat.from(this).areNotificationsEnabled() -> "granted"
+            granted -> "denied" // turned off in android settings
+            getSharedPreferences("app", 0).getBoolean("notif_denied", false) -> "denied"
+            else -> "default"
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         // older androids read the splash from the current theme, so pick the holiday one first
@@ -241,6 +259,11 @@ class MainActivity : ComponentActivity() {
         web.setOnLongClickListener { onFeed }
 
         web.addJavascriptInterface(Bridge(), "SmolishBridge")
+        // web push for the site (it says "not supported" in a webview otherwise). has to run before
+        // the site's own scripts, so it's a document-start script, only on smolish.com
+        if (WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
+            WebViewCompat.addDocumentStartJavaScript(web, assets.open("push_shim.js").bufferedReader().use { it.readText() }, setOf("https://smolish.com"))
+        }
         web.webViewClient = Client()
         web.webChromeClient = Chrome()
 
@@ -550,6 +573,37 @@ class MainActivity : ComponentActivity() {
                 runOnUiThread { web.evaluateJavascript("window.__smolishTrDone && window.__smolishTrDone($id, $arr)", null) }
             }
         }
+
+        // --- web push (push_shim.js)
+        @JavascriptInterface
+        fun notifPermission() = this@MainActivity.notifPermission()
+
+        @JavascriptInterface
+        fun requestNotifPermission() = runOnUiThread {
+            if (Build.VERSION.SDK_INT >= 33) notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+            else web.evaluateJavascript("window.__smolishPermResult && window.__smolishPermResult('${notifPermission()}')", null)
+        }
+
+        /** The site turned on push: make the subscription and start listening for it. */
+        @JavascriptInterface
+        fun pushSubscribe(): String? {
+            val sub = WebPush.subscribe(this@MainActivity)
+            runOnUiThread { NotifyService.restart(this@MainActivity) }
+            return sub
+        }
+
+        @JavascriptInterface
+        fun pushSubscription(): String? = WebPush.subscriptionJson(this@MainActivity)
+
+        @JavascriptInterface
+        fun pushUnsubscribe() {
+            WebPush.unsubscribe(this@MainActivity)
+            runOnUiThread { NotifyService.restart(this@MainActivity) }
+        }
+
+        /** new Notification(...) from the page itself. */
+        @JavascriptInterface
+        fun showLocal(title: String, body: String, url: String) = Notify.showPush(this@MainActivity, title, body, url, null)
 
         @JavascriptInterface
         fun onAccount(handle: String) {
