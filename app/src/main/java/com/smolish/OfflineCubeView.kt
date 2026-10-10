@@ -204,24 +204,24 @@ class OfflineCubeView @JvmOverloads constructor(
         if (!isFound) {
             charge = (charge - dt * 0.05f).coerceAtLeast(0f) // runs down
             // wander around the sky in an uneven way, like it's really looking
-            aim = -90f + 62f * sin(t * 0.7f) + 14f * sin(t * 1.9f)
+            aim = -85f + 40f * sin(t * 0.7f) + 10f * sin(t * 1.9f)
         }
         shakeJitter = (shakeJitter - dt * 2.5f).coerceAtLeast(0f)
         val hop = if (isFound) { val h = (ft / 0.45f).coerceIn(0f, 1f); 40 * dp * 4 * h * (1 - h) } else 0f
         val bodyFeet = feet - hop
         val top = bodyFeet - size
 
-        // the torch is held up above the cube, pivoting around its handle
+        // the torch is held in one hand out to the cube's right side, pivoting around the grip
         val jx = if (shakeJitter > 0) (Random.nextFloat() - 0.5f) * 8 * dp * shakeJitter else 0f
         val jy = if (shakeJitter > 0) (Random.nextFloat() - 0.5f) * 8 * dp * shakeJitter else 0f
-        val px = cx + jx
-        val py = top - 30 * dp + jy
+        val px = cx + size * 0.68f + jx
+        val py = top + size * 0.15f + jy
         val rad = Math.toRadians(aim.toDouble())
         val dx = cos(rad).toFloat()
         val dy = sin(rad).toFloat()
         val torchLen = 42 * dp
-        val lx = px + dx * torchLen * 0.6f
-        val ly = py + dy * torchLen * 0.6f
+        val lx = px + dx * torchLen * 0.55f
+        val ly = py + dy * torchLen * 0.55f
 
         // beam: a cone that gets longer and brighter with charge, flickers when nearly empty
         var bright = charge
@@ -243,8 +243,9 @@ class OfflineCubeView @JvmOverloads constructor(
         if (isFound) {
             val pop = (ft / 0.35f).coerceIn(0f, 1f)
             val s = pop * (1.25f - 0.25f * pop)
-            val wx = lx + dx * 150 * dp
-            val wy = ly + dy * 150 * dp
+            // in the beam, but never outside the view
+            val wx = (lx + dx * 150 * dp).coerceIn(24 * dp, width - 24 * dp)
+            val wy = (ly + dy * 150 * dp).coerceAtLeast(24 * dp)
             for (i in 1..3) {
                 val r = i * 9 * dp * s
                 rect.set(wx - r, wy - r, wx + r, wy + r)
@@ -258,20 +259,26 @@ class OfflineCubeView @JvmOverloads constructor(
 
         drawBody(c, cx, bodyFeet, 1f)
 
-        // torch body + lens
+        // torch: square-ended handle, a head that flares out, the lens at the front
+        // (drawn pointing "up", then rotated to the aim)
         c.save()
         c.rotate(aim + 90f, px, py)
-        rect.set(px - 6.5f * dp, py - torchLen * 0.6f, px + 6.5f * dp, py + torchLen * 0.4f)
-        c.drawRoundRect(rect, 4 * dp, 4 * dp, torch)
-        rect.set(px - 9.5f * dp, py - torchLen * 0.6f - 3 * dp, px + 9.5f * dp, py - torchLen * 0.6f + 6 * dp)
+        val L = torchLen
+        rect.set(px - 5.5f * dp, py - L * 0.15f, px + 5.5f * dp, py + L * 0.45f)
+        c.drawRoundRect(rect, 2 * dp, 2 * dp, torch)
+        path.reset()
+        path.moveTo(px - 5.5f * dp, py - L * 0.15f)
+        path.lineTo(px - 10f * dp, py - L * 0.55f)
+        path.lineTo(px + 10f * dp, py - L * 0.55f)
+        path.lineTo(px + 5.5f * dp, py - L * 0.15f)
+        path.close()
+        c.drawPath(path, torch)
+        rect.set(px - 10f * dp, py - L * 0.55f - 3 * dp, px + 10f * dp, py - L * 0.55f + 3 * dp)
         lens.alpha = (120 + 135 * bright).toInt().coerceIn(0, 255)
-        c.drawRoundRect(rect, 3 * dp, 3 * dp, lens)
+        c.drawRoundRect(rect, 2 * dp, 2 * dp, lens)
         c.restore()
-        // both circle hands on the handle
-        val hx = -dy * handR * 1.05f
-        val hy = dx * handR * 1.05f
-        c.drawCircle(px + hx * 1.15f - dx * 6 * dp, py + hy * 1.15f - dy * 6 * dp, handR, white)
-        c.drawCircle(px - hx * 1.15f - dx * 6 * dp, py - hy * 1.15f - dy * 6 * dp, handR, white)
+        // one circle hand gripping the handle
+        c.drawCircle(px, py, handR, white)
 
         // eyes follow the beam; happy ^ ^ once wifi is found
         val eyeY = top + size / 2 + eyeDy
