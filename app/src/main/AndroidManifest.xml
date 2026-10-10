@@ -207,7 +207,7 @@
             android:theme="@style/Theme.Smolish"
             android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboard|keyboardHidden" />
         <activity
-            android:name=".SetupActivity"
+            android:name=".WelcomeActivity"
             android:exported="false"
             android:label="@string/setup_title"
             android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboard|keyboardHidden" />

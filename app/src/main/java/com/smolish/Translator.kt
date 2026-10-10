@@ -46,9 +46,15 @@ object Translator {
             "upload" to "Загрузить", "search" to "Поиск", "comments" to "Комментарии", "reply" to "Ответить",
             "log in" to "Войти", "sign up" to "Регистрация", "sign in" to "Войти", "log out" to "Выйти",
             "notifications" to "Уведомления", "settings" to "Настройки", "messages" to "Сообщения",
-            "download" to "Скачать", "post" to "Опубликовать", "edit profile" to "Редактировать профиль",
+            "smolish" to "Смолиш", "download" to "Скачать", "post" to "Опубликовать", "edit profile" to "Редактировать профиль",
         ),
     )
+
+    // names the translator leaves in latin or mangles, fixed inside whole sentences too
+    private val names = mapOf("ru" to listOf(Regex("(?i)(?<![@/\\w])smolish(?!\\.?\\w)") to "Смолиш"))
+
+    private fun fixNames(s: String, lang: String) =
+        names[lang]?.fold(s) { acc, (re, to) -> re.replace(acc, to) } ?: s
 
     /** Translates [texts] from English; [done] gets null if nothing could. Runs off the main thread. */
     fun translate(texts: List<String>, lang: String, done: (List<String>?) -> Unit) {
@@ -65,8 +71,8 @@ object Translator {
                     ?: runCatching { google(todo.map { texts[it] }, lang) }.getOrNull()
                 if (got == null) return@execute done(null)
                 todo.forEachIndexed { k, i ->
-                    out[i] = got[k]
-                    cache.put("$lang\u0000${texts[i]}", got[k])
+                    out[i] = fixNames(got[k], lang)
+                    cache.put("$lang\u0000${texts[i]}", out[i])
                 }
             }
             done(out.map { it ?: "" })

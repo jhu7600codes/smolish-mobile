@@ -98,7 +98,7 @@ class SettingsActivity : ComponentActivity() {
                 override fun onNothingSelected(p: AdapterView<*>?) {}
             }
         }
-        findViewById<Button>(R.id.run_setup).setOnClickListener { startActivity(Intent(this, SetupActivity::class.java)) }
+        findViewById<Button>(R.id.run_setup).setOnClickListener { startActivity(Intent(this, WelcomeActivity::class.java)) }
         val langSpinner = findViewById<Spinner>(R.id.translate_lang).apply {
             adapter = ArrayAdapter(this@SettingsActivity, android.R.layout.simple_spinner_dropdown_item, Translator.LANGS.map { Translator.name(it) })
             setSelection(Translator.LANGS.indexOf(Translator.lang(this@SettingsActivity)).coerceAtLeast(0))

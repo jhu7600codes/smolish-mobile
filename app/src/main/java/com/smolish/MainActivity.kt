@@ -755,8 +755,8 @@ class MainActivity : ComponentActivity() {
         splash.animate().alpha(0f).setStartDelay(150).setDuration(350).withEndAction {
             splash.stop()
             splash.isVisible = false
-            // first launch: Smolish Setup (birthday + region for the seasonal icons)
-            if (!Icons.setupDone(this)) startActivity(Intent(this, SetupActivity::class.java))
+            // first launch: Smol's welcome (language, birthday, region, translation, notifications)
+            if (!Icons.setupDone(this)) startActivity(Intent(this, WelcomeActivity::class.java))
             else web.postDelayed({ maybeAskNotifications() }, 1500)
         }
     }
