@@ -109,6 +109,8 @@ class MainActivity : ComponentActivity() {
     private val seamlessTimeout = Runnable { finishHide() }
     private var hideTopbarNext = false
     @Volatile private var resumed = false
+    private var translateState = ""
+    private val translateJs by lazy { assets.open("translate.js").bufferedReader().use { it.readText() } }
     @Volatile private var soundRefreshQueued = false
     // opened from the "Offline mode" shortcut: stay offline even if the internet comes back
     private var offlineByChoice = false
@@ -163,6 +165,7 @@ class MainActivity : ComponentActivity() {
         splash.onIntroDone = { maybeHideSplash() }
         splash.theme = Icons.wanted(this) // holiday hat / eyes match the launcher icon
         rememberSplashTheme()
+        translateState = Translator.state(this)
         popupHost = findViewById(R.id.popup_host)
         statusBg = findViewById(R.id.status_bg)
         navBg = findViewById(R.id.nav_bg)
@@ -329,6 +332,8 @@ class MainActivity : ComponentActivity() {
         val last = getSharedPreferences("app", 0).getInt("last_unread", -1)
         web.evaluateJavascript("window.__smolishLastUnread = $last;", null)
         web.evaluateJavascript(bridgeJs, null)
+        // only smolish itself, not the login pages of google & co
+        if (Translator.isOn(this) && isOurHost(web.url?.let { Uri.parse(it).host })) web.evaluateJavascript(translateJs, null)
     }
 
     private inner class Client : WebViewClient() {
@@ -510,6 +515,16 @@ class MainActivity : ComponentActivity() {
                 reloadWithLoader(seamless = SettingsActivity.isSeamless(this@MainActivity))
             }
             return true
+        }
+
+        /** From translate.js: [json] is an array of english texts, answered via __smolishTrDone(id, [...]). */
+        @JavascriptInterface
+        fun translate(id: Int, json: String) {
+            val texts = runCatching { org.json.JSONArray(json).let { a -> List(a.length()) { a.getString(it) } } }.getOrNull() ?: return
+            Translator.translate(texts, Translator.lang(this@MainActivity)) { out ->
+                val arr = out?.let { org.json.JSONArray(it).toString() } ?: "null"
+                runOnUiThread { web.evaluateJavascript("window.__smolishTrDone && window.__smolishTrDone($id, $arr)", null) }
+            }
         }
 
         @JavascriptInterface
@@ -795,6 +810,12 @@ class MainActivity : ComponentActivity() {
             val forced = OfflineStore.isForced(this)
             if (forced && !inOffline()) goOffline()
             else if (!forced && !offlineByChoice && inOffline() && OfflineStore.isOnline(this)) goOnline()
+        }
+        // translation turned on/off or another language picked in settings
+        val tr = Translator.state(this)
+        if (tr != translateState) {
+            translateState = tr
+            if (splashHidden && !inOffline()) reloadWithLoader(seamless = false)
         }
         resumed = true
         web.onResume()

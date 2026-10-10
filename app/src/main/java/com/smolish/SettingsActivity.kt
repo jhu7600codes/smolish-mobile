@@ -99,6 +99,22 @@ class SettingsActivity : ComponentActivity() {
             }
         }
         findViewById<Button>(R.id.run_setup).setOnClickListener { startActivity(Intent(this, SetupActivity::class.java)) }
+        val langSpinner = findViewById<Spinner>(R.id.translate_lang).apply {
+            adapter = ArrayAdapter(this@SettingsActivity, android.R.layout.simple_spinner_dropdown_item, Translator.LANGS.map { Translator.name(it) })
+            setSelection(Translator.LANGS.indexOf(Translator.lang(this@SettingsActivity)).coerceAtLeast(0))
+            isEnabled = Translator.isOn(this@SettingsActivity)
+            onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+                override fun onItemSelected(p: AdapterView<*>?, v: View?, pos: Int, id: Long) = Translator.setLang(this@SettingsActivity, Translator.LANGS[pos])
+                override fun onNothingSelected(p: AdapterView<*>?) {}
+            }
+        }
+        findViewById<Switch>(R.id.translate).apply {
+            isChecked = Translator.isOn(this@SettingsActivity)
+            setOnCheckedChangeListener { _, on ->
+                Translator.setOn(this@SettingsActivity, on)
+                langSpinner.isEnabled = on
+            }
+        }
         findViewById<Switch>(R.id.seamless).apply {
             isChecked = isSeamless(this@SettingsActivity)
             setOnCheckedChangeListener { _, on -> getSharedPreferences("app", 0).edit().putBoolean("seamless", on).apply() }

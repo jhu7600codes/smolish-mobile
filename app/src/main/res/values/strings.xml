@@ -66,6 +66,10 @@
         <item>Eid</item>
         <item>Maslenitsa</item>
     </string-array>
+    <string name="translate_section">Translation</string>
+    <string name="translate_on">Translate Smolish</string>
+    <string name="translate_explain">Smolish is only in English, so the app translates it for you: buttons, captions, comments, everything. Uses Yandex Translate (it gets memes); if Yandex is down, Google Translate takes over. Long-press any text to see the original.</string>
+    <string name="translate_lang">Language</string>
     <string name="dev_section">Developer</string>
     <string name="dev_explain">Only you see this, @jhu. Plays a holiday\'s launch: the system splash, then the intro. Tap to replay, back to leave.</string>
     <string name="test_splash">Test splash</string>
