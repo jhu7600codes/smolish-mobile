@@ -11,6 +11,7 @@ import android.graphics.RectF
 import android.util.AttributeSet
 import android.view.View
 import kotlin.math.abs
+import kotlin.math.atan
 import kotlin.math.cos
 import kotlin.math.max
 import kotlin.math.min
@@ -64,7 +65,19 @@ class BouncingSplashView @JvmOverloads constructor(
     private val radii = FloatArray(8)
 
     private val gravity = 3200 * dp
-    private val fallTurn = 90f // how far it turns while falling
+    private var fallTurn = 90f // how far it turns while falling
+
+    // holiday look (see Icons / Decor): hat, eyes, background particles
+    var theme = "default"
+        set(v) {
+            field = v
+            fallTurn = if (v == "aprilfools") 180f else 90f // april fools: lands upside down
+            particles.clear()
+        }
+    private val bgColor = 0xFF0E0F13.toInt()
+    private class Particle(var x: Float, var y: Float, var vx: Float, var vy: Float, var spin: Float, var a: Float, val color: Int, val s: Float)
+    private val particles = ArrayList<Particle>()
+    private val partPaint = Paint(Paint.ANTI_ALIAS_FLAG)
 
     // x = center, y = bottom edge ("feet")
     private var x = 0f
@@ -140,6 +153,7 @@ class BouncingSplashView @JvmOverloads constructor(
         val dt = if (lastFrame == 0L) 0f else min((now - lastFrame) / 1e9f, 1 / 30f)
         lastFrame = now
 
+        drawParticles(canvas, dt)
         if (!introDone) {
             stepIntro(dt)
             drawIntro(canvas)
@@ -170,9 +184,55 @@ class BouncingSplashView @JvmOverloads constructor(
         val rad = Math.toRadians(-angle.toDouble())
         val ex = (eyeX * cos(rad) - eyeY * sin(rad)).toFloat()
         val ey = (eyeX * sin(rad) + eyeY * cos(rad)).toFloat()
-        canvas.drawCircle(-eyeDx + ex, eyeDy + ey, eyeR, eye)
-        canvas.drawCircle(eyeDx + ex, eyeDy + ey, eyeR, eye)
+        if (!Decor.eyes(canvas, theme, ex, eyeDy + ey, eyeDx, eyeR, Color.WHITE, bgColor)) {
+            canvas.drawCircle(-eyeDx + ex, eyeDy + ey, eyeR, eye)
+            canvas.drawCircle(eyeDx + ex, eyeDy + ey, eyeR, eye)
+        }
+        // the hat lags behind the movement a little, like the eyes
+        val hatAngle = HAT_ANGLE + (eyeY / (size * 0.1f)) * 10f
+        Decor.hat(canvas, theme, size * 0.14f, -size / 2 + stroke * 0.3f, hatAngle, size * HAT_U / ICON_W)
+        if (theme == "birthday") {
+            // both circle hands up in the air, waving a bit
+            val wave = sin(System.nanoTime() / 1e9 * 9).toFloat() * size * 0.03f
+            canvas.drawCircle(-size * 0.595f, -size * 0.83f + wave, size * 0.118f, eye)
+            canvas.drawCircle(size * 0.595f, -size * 0.83f - wave, size * 0.118f, eye)
+        }
         canvas.restore()
+    }
+
+    /** Snow for new year, confetti for birthdays, floating hearts for valentine's. */
+    private fun drawParticles(canvas: Canvas, dt: Float) {
+        if (theme !in setOf("winter", "birthday", "valentine")) return
+        if (particles.isEmpty()) repeat(if (theme == "valentine") 14 else 46) { particles.add(spawn(true)) }
+        for (q in particles) {
+            q.x += q.vx * dt; q.y += q.vy * dt; q.a += q.spin * dt
+            if (q.y > height + 30 * dp || q.y < -30 * dp) { val n = spawn(false); q.x = n.x; q.y = n.y }
+            when (theme) {
+                "winter" -> { partPaint.color = q.color; canvas.drawCircle(q.x + sin(q.a) * 6 * dp, q.y, q.s, partPaint) }
+                "valentine" -> Decor.heart(canvas, q.x + sin(q.a) * 10 * dp, q.y, q.s, q.color)
+                else -> {
+                    partPaint.color = q.color
+                    canvas.save(); canvas.rotate(q.a * 57f, q.x, q.y)
+                    canvas.drawRect(q.x - q.s, q.y - q.s * 0.45f, q.x + q.s, q.y + q.s * 0.45f, partPaint)
+                    canvas.restore()
+                }
+            }
+        }
+    }
+
+    private fun spawn(anywhere: Boolean): Particle {
+        val w = width.toFloat(); val h = height.toFloat()
+        return when (theme) {
+            "valentine" -> Particle(Random.nextFloat() * w, if (anywhere) Random.nextFloat() * h else h + 20 * dp,
+                0f, -(30 + Random.nextFloat() * 40) * dp, 1.5f + Random.nextFloat(), Random.nextFloat() * 6f,
+                Color.argb(70 + Random.nextInt(80), 255, 79, 139), (7 + Random.nextFloat() * 8) * dp)
+            "winter" -> Particle(Random.nextFloat() * w, if (anywhere) Random.nextFloat() * h else -10 * dp,
+                0f, (30 + Random.nextFloat() * 50) * dp, 1f + Random.nextFloat(), Random.nextFloat() * 6f,
+                Color.argb(110 + Random.nextInt(120), 255, 255, 255), (1.5f + Random.nextFloat() * 2.5f) * dp)
+            else -> Particle(Random.nextFloat() * w, if (anywhere) Random.nextFloat() * h else -10 * dp,
+                (Random.nextFloat() - 0.5f) * 30 * dp, (60 + Random.nextFloat() * 70) * dp, (Random.nextFloat() - 0.5f) * 8f,
+                Random.nextFloat() * 6f, CONFETTI[Random.nextInt(CONFETTI.size)], (3 + Random.nextFloat() * 2.5f) * dp)
+        }
     }
 
     private fun drawIntro(canvas: Canvas) {
@@ -208,8 +268,18 @@ class BouncingSplashView @JvmOverloads constructor(
         val r = lerp(33.5f, squareIcon * 0.076f, m)
         val edx = lerp(84f, squareIcon * 0.19f, m)
         val ey = lerp(366f, ICON_H - squareIcon / 2 + squareIcon * 0.17f, m)
-        canvas.drawCircle(cx - edx, ey, r, eye)
-        canvas.drawCircle(cx + edx, ey, r, eye)
+        if (!Decor.eyes(canvas, theme, cx, ey, edx, r, Color.WHITE, bgColor)) {
+            canvas.drawCircle(cx - edx, ey, r, eye)
+            canvas.drawCircle(cx + edx, ey, r, eye)
+        }
+        if (theme == "birthday") {
+            // hands pop up next to the body once the hat has landed
+            val pop = ((introT - 0.3f) / 0.15f).coerceIn(0f, 1f)
+            val hr = 0.118f * bw * pop
+            val hy = ICON_H - bh - 0.33f * bw
+            canvas.drawCircle(cx - 0.595f * bw, hy, hr, eye)
+            canvas.drawCircle(cx + 0.595f * bw, hy, hr, eye)
+        }
 
         // the clapper top. its underside is a straight line that meets the body's top edge at
         // HINGE_X, so rotating around that point lays it exactly flush on the body
@@ -243,7 +313,35 @@ class BouncingSplashView @JvmOverloads constructor(
             canvas.drawBitmap(arm, 0f, 0f, armPaint)
             canvas.restore()
         }
+        drawIntroHat(canvas, cx, bw, bh, sw)
         canvas.restore()
+    }
+
+    /**
+     * The holiday hat during the intro: drops onto the clapper top, rides it while it snaps shut
+     * and gets shoved in, then sits on the cube's top edge (same spot as while bouncing).
+     */
+    private fun drawIntroHat(canvas: Canvas, cx: Float, bw: Float, bh: Float, sw: Float) {
+        if (!Decor.hasHat(theme)) return
+        // on the arm: same point the seasonal icons use, moved like the arm (shear + sink + squeeze)
+        val t = tan(Math.toRadians(armAngle.toDouble())).toFloat()
+        val drop = ARM_BAND * (armAngle / CLOSE_ANGLE).coerceIn(0f, 1f)
+        val pivot = BODY_TOP + 26f
+        var ax = HAT_X
+        var ay = HAT_Y + drop + (HAT_X - HINGE_X) * t
+        ay = pivot + (ay - pivot) * (1f - armShove)
+        val armAng = Math.toDegrees(atan((ARM_SLOPE + t).toDouble())).toFloat() * (1f - armShove)
+        // on the cube: the same spot as drawSquare, in icon px
+        val tx = cx + 0.14f * bw
+        val ty = ICON_H - bh + sw * 0.3f
+        val f = armShove
+        val hx = lerp(ax, tx, f)
+        var hy = lerp(ay, ty, f)
+        val ang = lerp(armAng, HAT_ANGLE, f)
+        // falls in from above at the start
+        val fall = (introT / 0.3f).coerceIn(0f, 1f)
+        hy -= 320f * (1f - fall * fall)
+        Decor.hat(canvas, theme, hx, hy, ang, HAT_U * bw / ICON_W)
     }
 
     private fun stepIntro(dt: Float) {
@@ -258,6 +356,7 @@ class BouncingSplashView @JvmOverloads constructor(
             introT < 0.47f -> lerp(-6f, CLOSE_ANGLE, ((introT - 0.35f) / 0.12f).let { it * it })
             else -> CLOSE_ANGLE
         }
+        if (passed(0.3f) && Decor.hasHat(theme)) squashVel += 1.2f // hat lands
         if (passed(0.47f)) squashVel += 3f // clap
         armShove = if (introT < 0.56f) 0f else ease(((introT - 0.56f) / 0.2f).coerceAtMost(1f))
         if (passed(0.76f)) squashVel += 2.5f // arm merges into the body
@@ -366,6 +465,13 @@ class BouncingSplashView @JvmOverloads constructor(
         const val BODY_TOP = 215f // where the body's top edge is; the arm is everything above
         const val HINGE_X = 235.3f // where the arm's underside meets the body's top edge
         const val ARM_BAND = 53f // thickness of the arm's bottom line, same as the body's line
+        const val ARM_SLOPE = -0.3015f // tan of the arm's top / underside angle (-16.8 deg)
+        // hats: base point on the arm's top edge (same as the icons), units and tilt on the cube
+        const val HAT_X = 250f
+        const val HAT_Y = 29f
+        const val HAT_U = 12.19f // icon px per hat unit (the icons draw the clapper 42 units tall)
+        const val HAT_ANGLE = -8f
+        val CONFETTI = intArrayOf(0xFFFFD34E.toInt(), 0xFFFF5C9A.toInt(), 0xFF78E68C.toInt(), 0xFFFFFFFF.toInt(), 0xFFFF963C.toInt())
         const val CLOSE_ANGLE = 16.8f // angle of the arm's underside, shearing by it lays it flush
     }
 }

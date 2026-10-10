@@ -159,6 +159,7 @@ class MainActivity : ComponentActivity() {
         cube = findViewById(R.id.cube)
         // the intro always plays to the end; "loading" only starts once the cube falls
         splash.onIntroDone = { maybeHideSplash() }
+        splash.theme = Icons.wanted(this) // holiday hat / eyes match the launcher icon
         popupHost = findViewById(R.id.popup_host)
         statusBg = findViewById(R.id.status_bg)
         navBg = findViewById(R.id.nav_bg)

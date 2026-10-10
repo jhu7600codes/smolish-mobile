@@ -169,6 +169,10 @@ class OfflineCubeView @JvmOverloads constructor(
         val bob = if (awake) 0f else 3 * dp * sin(t * 1.6f)
         val feet = floor - lift + bob
         drawBody(c, cx, feet, 1f - squash)
+        // nightcap, swaying a little with the breathing; it jumps off his head a bit when he wakes
+        val capLift = if (awake) lift * 0.25f else 0f
+        Decor.hat(c, "sleep", cx + size * 0.14f, feet - size * (1f - squash) + stroke * 0.3f - capLift,
+            -8f + 3f * sin(t * 1.6f), size * 12.19f / 442f * 1.3f)
         val eyeY = feet - size / 2 * (1f - squash) + eyeDy
         if (awake) {
             c.drawCircle(cx - eyeDx, eyeY, eyeR * 1.15f, white)
