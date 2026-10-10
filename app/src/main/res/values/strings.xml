@@ -9,7 +9,7 @@
     <string name="download_failed">Download failed</string>
     <string name="no_app">No app can open this</string>
     <string name="notif_title">Stay in the loop?</string>
-    <string name="notif_body">Smolish would like to show notifications, for example when a download finishes. You can change this anytime in settings.</string>
+    <string name="notif_body">Smolish can tell you about new likes, comments, follows and messages, and when a download finishes. You can change this anytime in settings.</string>
     <string name="notif_yes">Sure</string>
     <string name="notif_no">Not now</string>
     <string name="settings">Settings</string>
@@ -63,4 +63,9 @@
     <string name="sleep_body">Your internet works, but Smolish isn\'t answering right now. Try again in a bit.</string>
     <string name="search_title">No internet</string>
     <string name="search_body">Shake your phone to charge the flashlight while the cube looks for wifi.</string>
+    <string name="notif_channel">Smolish activity</string>
+    <plurals name="notif_new">
+        <item quantity="one">You have %d new notification</item>
+        <item quantity="other">You have %d new notifications</item>
+    </plurals>
 </resources>

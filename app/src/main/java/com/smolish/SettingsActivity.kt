@@ -142,17 +142,24 @@ class SettingsActivity : ComponentActivity() {
         downloader.settings.domStorageEnabled = true
         CookieManager.getInstance().setAcceptThirdPartyCookies(downloader, true)
         downloader.addJavascriptInterface(Bridge(), "SmolishOffline")
+        downloader.settings.mediaPlaybackRequiresUserGesture = true // the hidden page stays silent
         downloader.webViewClient = object : WebViewClient() {
-            private var started = false
             override fun onPageFinished(view: WebView, url: String?) {
-                if (started || !downloading) return
-                started = true
-                val js = assets.open("offline_dl.js").bufferedReader().use { it.readText() }
-                view.evaluateJavascript("$js\nwindow.__smolishPrepare($videos);", null)
+                if (!downloading) return
+                // give the site a moment to boot its scripts (request signing), then start, once.
+                // a cloudflare check page has no next.js scripts, so we just wait for the real page
+                view.postDelayed({
+                    if (!downloading) return@postDelayed
+                    val js = assets.open("offline_dl.js").bufferedReader().use { it.readText() }
+                    view.evaluateJavascript(
+                        "if (!window.__smolishPrepareStarted && document.querySelector('script[src*=\"/_next/\"]')) {" +
+                            "window.__smolishPrepareStarted = true;\n$js\nwindow.__smolishPrepare($videos); }", null
+                    )
+                }, 2500)
             }
         }
-        // a plain file on smolish.com that cloudflare lets through, just to be on that origin
-        downloader.loadUrl("https://smolish.com/robots.txt")
+        // the real site, so its own scripts sign our api requests
+        downloader.loadUrl("https://smolish.com/")
     }
 
     private fun cancel() {

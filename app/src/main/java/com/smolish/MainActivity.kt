@@ -181,11 +181,13 @@ class MainActivity : ComponentActivity() {
         findViewById<View>(R.id.retry).setOnClickListener { retry() }
         onBackPressedDispatcher.addCallback(this, backHandler)
 
+        Notify.createChannel(this)
+        val openUrl = intent?.getStringExtra(Notify.EXTRA_URL)
         if (intent?.action == ACTION_OFFLINE) {
             if (OfflineStore.isEnabled(this)) offlineByChoice = true else toast(R.string.offline_disabled)
         }
         if (savedInstanceState == null || web.restoreState(savedInstanceState) == null) {
-            web.loadUrl(if (shouldBeOffline()) OfflineStore.URL else HOME)
+            web.loadUrl(if (shouldBeOffline()) OfflineStore.URL else openUrl ?: HOME)
         }
         splash.postDelayed({ onPageReady() }, MAX_SPLASH_MS) // never get stuck on the splash
     }
@@ -301,6 +303,8 @@ class MainActivity : ComponentActivity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        // tapped a notification while the app was open in the background
+        intent.getStringExtra(Notify.EXTRA_URL)?.let { url -> if (!inOffline()) showLoader { web.loadUrl(url) } }
         if (intent.action == ACTION_OFFLINE) {
             if (!OfflineStore.isEnabled(this)) return toast(R.string.offline_disabled)
             offlineByChoice = true
@@ -317,7 +321,12 @@ class MainActivity : ComponentActivity() {
 
     private fun isHttp(uri: Uri) = uri.scheme == "http" || uri.scheme == "https"
 
-    private fun injectBridge() = web.evaluateJavascript(bridgeJs, null)
+    private fun injectBridge() {
+        // the last unread count we saw, so a reload doesn't notify about the same things again
+        val last = getSharedPreferences("app", 0).getInt("last_unread", -1)
+        web.evaluateJavascript("window.__smolishLastUnread = $last;", null)
+        web.evaluateJavascript(bridgeJs, null)
+    }
 
     private inner class Client : WebViewClient() {
         override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? =
@@ -498,6 +507,18 @@ class MainActivity : ComponentActivity() {
                 reloadWithLoader(seamless = SettingsActivity.isSeamless(this@MainActivity))
             }
             return true
+        }
+
+        @JavascriptInterface
+        fun onUnread(count: Int) {
+            getSharedPreferences("app", 0).edit().putInt("last_unread", count).apply()
+        }
+
+        /** The unread count went up: show it as a real notification if you're not in the app. */
+        @JavascriptInterface
+        fun onNotification(count: Int, who: String, what: String) {
+            if (resumed) return // you're looking at the site, its own bell shows it
+            Notify.show(this@MainActivity, count, who, what)
         }
 
         @JavascriptInterface

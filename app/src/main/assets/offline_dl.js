@@ -1,6 +1,7 @@
-// runs in a hidden webview sitting on https://smolish.com (robots.txt, no ui), so every request
-// uses the logged in session and the browser that already passed cloudflare.
-// talks to SettingsActivity through window.SmolishOffline.
+// runs in a hidden webview that has the real https://smolish.com page loaded. that matters: the
+// site signs every /api request with its own script ("Request could not be verified" otherwise),
+// so our fetch() calls go through the page's own signing. talks to SettingsActivity through
+// window.SmolishOffline.
 window.__smolishPrepare = async function (count) {
   var N = window.SmolishOffline;
   var VIDEO_FILE = /\.(mp4|webm|mov|m4v)(\?|#|$)/i;
@@ -47,6 +48,9 @@ window.__smolishPrepare = async function (count) {
   // stream a response body to the app in base64 pieces (no giant blobs or strings in memory)
   async function jsGet(url, name) {
     var r = await fetch(url, { credentials: 'include' });
+    return stream(r, name);
+  }
+  async function stream(r, name) {
     if (!r.ok || !r.body) return false;
     if (!N.begin(name)) return false;
     var reader = r.body.getReader();
@@ -72,12 +76,37 @@ window.__smolishPrepare = async function (count) {
     return m ? m[1].toLowerCase() : fallback;
   }
 
+  // smolish's own "download" button (the raw file, the watermark is something the site adds in
+  // the browser afterwards, and only if the watermark setting is on). answers with the video or
+  // with json pointing at it
+  async function viaDownload(id, file) {
+    var r = await fetch('/api/videos/' + encodeURIComponent(id) + '/download', { credentials: 'include' }).catch(function () { return null; });
+    if (!r || !r.ok) return null;
+    var ct = (r.headers.get('content-type') || '').toLowerCase();
+    if (ct.indexOf('json') >= 0) {
+      var j = await r.json().catch(function () { return null; });
+      var url = j && (j.url || j.downloadUrl || j.href || findVideo(j, 0));
+      return url ? { url: url } : null;
+    }
+    if (ct.indexOf('video') >= 0 || ct.indexOf('octet-stream') >= 0) {
+      var f = file + '.' + (ct.indexOf('webm') >= 0 ? 'webm' : ct.indexOf('quicktime') >= 0 ? 'mov' : 'mp4');
+      return (await stream(r, f).catch(function () { return false; })) ? { file: f } : null;
+    }
+    return null;
+  }
+
+  async function errorText(r) {
+    var t = await r.text().catch(function () { return ''; });
+    try { t = JSON.parse(t).error || t; } catch (e) {}
+    return r.status + (t ? ' (' + String(t).slice(0, 100) + ')' : '');
+  }
+
   try {
     var out = [], seen = {}, cursor = null, tried = 0, sampleKeys = '', sawHls = false;
     N.progress(0, count, 'Loading your Smols…');
     while (out.length < count && tried < count * 3) {
       var r = await fetch('/api/feed' + (cursor ? '?cursor=' + encodeURIComponent(cursor) : ''), { credentials: 'include' });
-      if (!r.ok) throw Error('The feed answered ' + r.status + (r.status === 401 ? ' (log in first)' : ''));
+      if (!r.ok) throw Error('The feed answered ' + (await errorText(r)) + (r.status === 401 ? ', log in first' : ''));
       var page = await r.json();
       var items = page.items || [];
       if (!sampleKeys && items[0]) sampleKeys = Object.keys(items[0]).join(', ');
@@ -86,18 +115,24 @@ window.__smolishPrepare = async function (count) {
         if (!it || !it.id || seen[it.id]) continue;
         seen[it.id] = true;
         tried++;
-        var url = findVideo(it, 0);
-        if (!url) {
+        var id = String(it.id).replace(/[^a-zA-Z0-9_-]/g, '_');
+        N.progress(out.length, count, 'Downloading ' + (out.length + 1) + ' of ' + count);
+        // 1st choice: the site's own no-watermark download
+        var file = null, got = await viaDownload(it.id, id);
+        if (got && got.file) file = got.file;
+        var url = got && got.url ? got.url : null;
+        if (!file && !url) url = findVideo(it, 0);
+        if (!file && !url) {
           // not in the feed item, ask the video endpoint
           var vr = await fetch('/api/videos/' + encodeURIComponent(it.id), { credentials: 'include' }).catch(function () { return null; });
           if (vr && vr.ok) url = findVideo(await vr.json().catch(function () { return null; }), 0);
         }
         if (JSON.stringify(it).indexOf('.m3u8') >= 0) sawHls = true;
-        if (!url) continue;
-        N.progress(out.length, count, 'Downloading ' + (out.length + 1) + ' of ' + count);
-        var id = String(it.id).replace(/[^a-zA-Z0-9_-]/g, '_');
-        var file = id + '.' + ext(url, 'mp4');
-        if (!(await getFile(url, file))) continue;
+        if (!file) {
+          if (!url) continue;
+          file = id + '.' + ext(url, 'mp4');
+          if (!(await getFile(url, file))) continue;
+        }
         var avatarUrl = pick(it, ['authorAvatarUrl', 'author.avatarUrl', 'user.avatarUrl', 'avatarUrl', 'author.avatar']);
         var avatar = null;
         if (avatarUrl) {
