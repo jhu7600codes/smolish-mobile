@@ -62,7 +62,7 @@ object Icons {
         easter(d.year, region)?.let { e ->
             if (!d.isBefore(e.minusDays(3)) && !d.isAfter(e.plusDays(1))) return "easter"
         }
-        if (within(MonthDay.of(10, 24), MonthDay.of(11, 1))) return "halloween"
+        if (md.monthValue == 10) return "halloween" // the whole spooky month
         if (within(MonthDay.of(2, 10), MonthDay.of(2, 15))) return "valentine"
         if (region == MUSLIM && HijrahDate.from(d).get(ChronoField.MONTH_OF_YEAR) == 9) return "ramadan"
         val winter = when (region) {
