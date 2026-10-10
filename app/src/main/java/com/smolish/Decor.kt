@@ -27,7 +27,8 @@ object Decor {
     private const val NIGHT_BLUE = 0xFF5B7BD5.toInt()
     private const val WHITE = 0xFFFFFFFF.toInt()
 
-    fun hasHat(kind: String) = kind in setOf("halloween", "winter", "easter", "birthday", "sleep")
+    fun hasHat(kind: String) = kind in setOf("halloween", "winter", "easter", "birthday", "sleep", "thanksgiving", "ramadan", "eid")
+    private val path2 = Path()
 
     /** Draws the hat for [kind] with its base at x,y, tilted by [angle] degrees, [u] px per hat unit. */
     fun hat(c: Canvas, kind: String, x: Float, y: Float, angle: Float, u: Float) {
@@ -65,6 +66,29 @@ object Decor {
                     poly(c, HOT_PINK, -7.5f * (1 - a), -17f * a, 7.5f * (1 - a), -17f * a, 7.5f * (1 - b), -17f * b, -7.5f * (1 - b), -17f * b)
                 }
                 circle(c, 0f, -17f, 2.8f, WHITE)
+            }
+            "thanksgiving" -> { // pilgrim hat with a gold buckle
+                oval(c, 0f, 0f, 11f, 2.4f, 0xFF3A3A42.toInt())
+                poly(c, 0xFF4A4A54.toInt(), -6.5f, -1f, 6.5f, -1f, 5f, -13f, -5f, -13f)
+                poly(c, 0xFF8B5A2B.toInt(), -6.3f, -1.4f, 6.3f, -1.4f, 6f, -4.2f, -6f, -4.2f)
+                poly(c, 0xFFFFC83C.toInt(), -2.2f, -1.2f, 2.2f, -1.2f, 2.2f, -4.4f, -2.2f, -4.4f)
+                poly(c, 0xFF8B5A2B.toInt(), -1.1f, -2f, 1.1f, -2f, 1.1f, -3.6f, -1.1f, -3.6f)
+            }
+            "ramadan", "eid" -> { // golden crescent moon and star floating above (not a hat)
+                p.color = 0xFFFFCD50.toInt()
+                path.reset(); path.addCircle(4f, -13f, 6.2f, Path.Direction.CW)
+                path2.reset(); path2.addCircle(7.4f, -14.4f, 6.2f, Path.Direction.CW)
+                path.op(path2, Path.Op.DIFFERENCE)
+                c.drawPath(path, p)
+                path.reset()
+                for (i in 0 until 10) {
+                    val r = if (i % 2 == 0) 2.6f else 1.05f
+                    val a = Math.toRadians(-90.0 + 36 * i)
+                    val px = (13f + r * cos(a)).toFloat(); val py = (-18.5f + r * sin(a)).toFloat()
+                    if (i == 0) path.moveTo(px, py) else path.lineTo(px, py)
+                }
+                path.close()
+                c.drawPath(path, p)
             }
             "sleep" -> {
                 // floppy nightcap, the tip hangs down to the right with a pompom

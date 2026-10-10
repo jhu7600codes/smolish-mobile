@@ -202,14 +202,26 @@ class BouncingSplashView @JvmOverloads constructor(
 
     /** Snow for new year, confetti for birthdays, floating hearts for valentine's. */
     private fun drawParticles(canvas: Canvas, dt: Float) {
-        if (theme !in setOf("winter", "birthday", "valentine")) return
-        if (particles.isEmpty()) repeat(if (theme == "valentine") 14 else 46) { particles.add(spawn(true)) }
+        if (theme !in setOf("winter", "birthday", "valentine", "ramadan", "eid")) return
+        if (particles.isEmpty()) repeat(if (theme == "valentine") 14 else if (theme == "ramadan") 40 else 46) { particles.add(spawn(true)) }
         for (q in particles) {
             q.x += q.vx * dt; q.y += q.vy * dt; q.a += q.spin * dt
             if (q.y > height + 30 * dp || q.y < -30 * dp) { val n = spawn(false); q.x = n.x; q.y = n.y }
             when (theme) {
                 "winter" -> { partPaint.color = q.color; canvas.drawCircle(q.x + sin(q.a) * 6 * dp, q.y, q.s, partPaint) }
                 "valentine" -> Decor.heart(canvas, q.x + sin(q.a) * 10 * dp, q.y, q.s, q.color)
+                "ramadan" -> { // still night sky, stars twinkle in place
+                    partPaint.color = q.color
+                    partPaint.alpha = ((0.35f + 0.65f * (0.5f + 0.5f * sin(q.a))) * Color.alpha(q.color)).toInt()
+                    canvas.drawCircle(q.x, q.y, q.s, partPaint)
+                }
+                "eid" -> { // gold sparkles drifting down, spinning
+                    partPaint.color = q.color
+                    canvas.save(); canvas.rotate(q.a * 40f, q.x, q.y)
+                    canvas.drawRect(q.x - q.s, q.y - q.s * 0.28f, q.x + q.s, q.y + q.s * 0.28f, partPaint)
+                    canvas.drawRect(q.x - q.s * 0.28f, q.y - q.s, q.x + q.s * 0.28f, q.y + q.s, partPaint)
+                    canvas.restore()
+                }
                 else -> {
                     partPaint.color = q.color
                     canvas.save(); canvas.rotate(q.a * 57f, q.x, q.y)
@@ -226,6 +238,11 @@ class BouncingSplashView @JvmOverloads constructor(
             "valentine" -> Particle(Random.nextFloat() * w, if (anywhere) Random.nextFloat() * h else h + 20 * dp,
                 0f, -(30 + Random.nextFloat() * 40) * dp, 1.5f + Random.nextFloat(), Random.nextFloat() * 6f,
                 Color.argb(70 + Random.nextInt(80), 255, 79, 139), (7 + Random.nextFloat() * 8) * dp)
+            "ramadan" -> Particle(Random.nextFloat() * w, Random.nextFloat() * h, 0f, 0f, 1.5f + Random.nextFloat() * 2f,
+                Random.nextFloat() * 6f, Color.argb(150 + Random.nextInt(100), 255, 236, 170), (1f + Random.nextFloat() * 1.6f) * dp)
+            "eid" -> Particle(Random.nextFloat() * w, if (anywhere) Random.nextFloat() * h else -10 * dp,
+                (Random.nextFloat() - 0.5f) * 20 * dp, (35 + Random.nextFloat() * 45) * dp, (Random.nextFloat() - 0.5f) * 4f,
+                Random.nextFloat() * 6f, Color.argb(160 + Random.nextInt(90), 255, 215, 100), (2.5f + Random.nextFloat() * 2.5f) * dp)
             "winter" -> Particle(Random.nextFloat() * w, if (anywhere) Random.nextFloat() * h else -10 * dp,
                 0f, (30 + Random.nextFloat() * 50) * dp, 1f + Random.nextFloat(), Random.nextFloat() * 6f,
                 Color.argb(110 + Random.nextInt(120), 255, 255, 255), (1.5f + Random.nextFloat() * 2.5f) * dp)

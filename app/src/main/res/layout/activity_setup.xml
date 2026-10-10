@@ -124,6 +124,33 @@
                 android:textColor="@color/text" />
 
             <RadioButton
+                android:id="@+id/region_us"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:buttonTint="@color/brand"
+                android:paddingVertical="6dp"
+                android:text="@string/region_us"
+                android:textColor="@color/text" />
+
+            <RadioButton
+                android:id="@+id/region_ca"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:buttonTint="@color/brand"
+                android:paddingVertical="6dp"
+                android:text="@string/region_ca"
+                android:textColor="@color/text" />
+
+            <RadioButton
+                android:id="@+id/region_muslim"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:buttonTint="@color/brand"
+                android:paddingVertical="6dp"
+                android:text="@string/region_muslim"
+                android:textColor="@color/text" />
+
+            <RadioButton
                 android:id="@+id/region_none"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"

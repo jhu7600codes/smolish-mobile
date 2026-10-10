@@ -51,6 +51,9 @@ class SetupActivity : ComponentActivity() {
 
         region.check(when (Icons.region(this)) {
             Icons.WESTERN -> R.id.region_west
+            Icons.USA -> R.id.region_us
+            Icons.CANADA -> R.id.region_ca
+            Icons.MUSLIM -> R.id.region_muslim
             Icons.NO_RELIGION -> R.id.region_none
             else -> R.id.region_ru
         })
@@ -59,6 +62,9 @@ class SetupActivity : ComponentActivity() {
             Icons.setBirthday(this, if (noBirthday.isChecked) null else MonthDay.of(month.value, day.value))
             Icons.setRegion(this, when (region.checkedRadioButtonId) {
                 R.id.region_west -> Icons.WESTERN
+                R.id.region_us -> Icons.USA
+                R.id.region_ca -> Icons.CANADA
+                R.id.region_muslim -> Icons.MUSLIM
                 R.id.region_none -> Icons.NO_RELIGION
                 else -> Icons.RUSSIA
             })
