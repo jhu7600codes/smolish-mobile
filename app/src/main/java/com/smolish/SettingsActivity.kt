@@ -157,6 +157,28 @@ class SettingsActivity : ComponentActivity() {
             setOnCheckedChangeListener { _, on -> getSharedPreferences("app", 0).edit().putBoolean("dev_welcome", on).apply() }
         }
         findViewById<Button>(R.id.dev_welcome_now).setOnClickListener { startActivity(Intent(this, WelcomeActivity::class.java)) }
+        val pushStatus = findViewById<TextView>(R.id.push_status)
+        fun showPush() {
+            val svc = getString(if (NotifyService.running) R.string.service_running else R.string.service_stopped)
+            pushStatus.text = WebPush.topic(this)?.takeIf { WebPush.isActive(this) }
+                ?.let { getString(R.string.push_on, it, svc) } ?: getString(R.string.push_off, svc)
+        }
+        showPush()
+        // a notification straight from the app (checks the channel and permission)
+        findViewById<Button>(R.id.test_notif).setOnClickListener {
+            Notify.showPush(this, "Smol", "This is a test notification. Tap it to open your notifications.", "/notifications", "test")
+        }
+        // the whole push chain: encrypt like smolish's server would, post to ntfy, the service gets it back
+        findViewById<Button>(R.id.test_push).setOnClickListener {
+            showPush()
+            if (!WebPush.isActive(this)) return@setOnClickListener toast(R.string.test_push_off)
+            val payload = JSONObject().put("title", "Smol").put("body", "Test push through ntfy.sh, decrypted on your phone.")
+                .put("url", "/notifications").put("tag", "test-push").toString()
+            thread {
+                val ok = WebPush.sendTest(this, payload)
+                runOnUiThread { toast(if (ok) R.string.test_push_sent else R.string.test_push_failed) }
+            }
+        }
         val crash = findViewById<TextView>(R.id.crash)
         fun showCrash() { crash.text = CrashLog.read(this) ?: getString(R.string.crash_none) }
         showCrash()
@@ -168,6 +190,8 @@ class SettingsActivity : ComponentActivity() {
         }
         findViewById<Button>(R.id.crash_clear).setOnClickListener { CrashLog.clear(this); showCrash() }
     }
+
+    private fun toast(res: Int) = android.widget.Toast.makeText(this, res, android.widget.Toast.LENGTH_SHORT).show()
 
     private fun showCount() {
         countLabel.text = getString(R.string.offline_count, videos)

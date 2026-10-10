@@ -80,6 +80,15 @@
     <string name="test_splash">Test splash</string>
     <string name="dev_welcome">Show Smol\'s welcome on every launch</string>
     <string name="dev_welcome_now">Run the welcome now</string>
+    <string name="test_notif">Test notification</string>
+    <string name="test_push">Test push (via ntfy)</string>
+    <string name="push_on">Push: on, via ntfy topic %1$s · background service %2$s</string>
+    <string name="push_off">Push: off (turn it on in Smolish\'s settings > Notifications), polling every minute · background service %1$s</string>
+    <string name="service_running">running</string>
+    <string name="service_stopped">stopped</string>
+    <string name="test_push_sent">Sent to ntfy, should pop up in a second</string>
+    <string name="test_push_failed">Couldn\'t reach ntfy.sh</string>
+    <string name="test_push_off">Turn on push in Smolish\'s settings first</string>
     <string name="crash_none">No crashes saved. Nice.</string>
     <string name="crash_copy">Copy crash log</string>
     <string name="crash_clear">Clear</string>

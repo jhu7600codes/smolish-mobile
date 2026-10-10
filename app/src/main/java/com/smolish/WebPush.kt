@@ -109,6 +109,47 @@ object WebPush {
         String(plain, 0, maxOf(end, 0), Charsets.UTF_8)
     }.getOrNull()
 
+    /**
+     * The sender's side (what smolish's server does), for the developer "test push" button:
+     * encrypts [text] for our own subscription and posts it to our ntfy topic, so it comes back
+     * through the whole chain: ntfy -> NotifyService -> decrypt -> notification. Network, call off the main thread.
+     */
+    fun sendTest(ctx: Context, text: String): Boolean = runCatching {
+        val p = prefs(ctx)
+        val topic = p.getString("topic", null) ?: return false
+        val uaPublic = unb64url(p.getString("pub", "")!!)
+        val auth = unb64url(p.getString("auth", "")!!)
+        val body = encrypt(text.toByteArray(), uaPublic, auth)
+        val c = java.net.URL("$NTFY/$topic").openConnection() as java.net.HttpURLConnection
+        c.requestMethod = "POST"
+        c.doOutput = true
+        c.setRequestProperty("Content-Encoding", "aes128gcm")
+        c.setRequestProperty("Content-Type", "application/octet-stream")
+        c.setRequestProperty("TTL", "60")
+        c.outputStream.use { it.write(body) }
+        c.responseCode in 200..299
+    }.getOrDefault(false)
+
+    fun encrypt(plain: ByteArray, uaPublic: ByteArray, auth: ByteArray): ByteArray {
+        val kp = KeyPairGenerator.getInstance("EC").apply { initialize(ECGenParameterSpec("secp256r1")) }.generateKeyPair()
+        val asPublic = raw(kp.public as ECPublicKey)
+        val ka = KeyAgreement.getInstance("ECDH")
+        ka.init(kp.private)
+        ka.doPhase(publicKey(uaPublic, kp.private as ECPrivateKey), true)
+        val ecdh = ka.generateSecret()
+        val salt = ByteArray(16).also { SecureRandom().nextBytes(it) }
+        val prkKey = hmac(auth, ecdh)
+        val ikm = hmac(prkKey, "WebPush: info".toByteArray() + 0 + uaPublic + asPublic + 1).copyOf(32)
+        val prk = hmac(salt, ikm)
+        val cek = hmac(prk, "Content-Encoding: aes128gcm".toByteArray() + 0 + 1).copyOf(16)
+        val nonce = hmac(prk, "Content-Encoding: nonce".toByteArray() + 0 + 1).copyOf(12)
+        val c = Cipher.getInstance("AES/GCM/NoPadding")
+        c.init(Cipher.ENCRYPT_MODE, SecretKeySpec(cek, "AES"), GCMParameterSpec(128, nonce))
+        val ct = c.doFinal(plain + 2)
+        val header = salt + byteArrayOf(0, 0, 16, 0) + byteArrayOf(65) + asPublic // record size 4096
+        return header + ct
+    }
+
     private operator fun ByteArray.plus(b: Int) = this + byteArrayOf(b.toByte())
 
     private fun hmac(key: ByteArray, data: ByteArray): ByteArray =
