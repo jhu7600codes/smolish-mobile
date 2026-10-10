@@ -27,6 +27,58 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="28dp"
+                android:text="@string/icon_section"
+                android:textAllCaps="true"
+                android:textColor="@color/brand"
+                android:textSize="13sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:lineSpacingMultiplier="1.2"
+                android:text="@string/icon_explain"
+                android:textColor="@color/text_dim"
+                android:textSize="15sp" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/icon_label"
+                    android:textColor="@color/text"
+                    android:textSize="16sp"
+                    android:textStyle="bold" />
+
+                <Spinner
+                    android:id="@+id/icon"
+                    android:layout_width="0dp"
+                    android:layout_height="48dp"
+                    android:layout_marginStart="16dp"
+                    android:layout_weight="1" />
+            </LinearLayout>
+
+            <Button
+                android:id="@+id/run_setup"
+                style="@android:style/Widget.Material.Button.Borderless.Colored"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="-12dp"
+                android:text="@string/run_setup"
+                android:textAllCaps="false"
+                android:textColor="@color/brand" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="28dp"
                 android:text="@string/playback_section"
                 android:textAllCaps="true"
                 android:textColor="@color/brand"

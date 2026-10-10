@@ -680,7 +680,9 @@ class MainActivity : ComponentActivity() {
         splash.animate().alpha(0f).setStartDelay(150).setDuration(350).withEndAction {
             splash.stop()
             splash.isVisible = false
-            web.postDelayed({ maybeAskNotifications() }, 1500)
+            // first launch: Smolish Setup (birthday + region for the seasonal icons)
+            if (!Icons.setupDone(this)) startActivity(Intent(this, SetupActivity::class.java))
+            else web.postDelayed({ maybeAskNotifications() }, 1500)
         }
     }
 
@@ -751,6 +753,7 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onStop() {
+        Icons.apply(this) // seasonal icon, swapped while you're not looking at the launcher
         network?.let { getSystemService(ConnectivityManager::class.java)?.unregisterNetworkCallback(it) }
         network = null
         super.onStop()

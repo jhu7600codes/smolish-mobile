@@ -5,4 +5,9 @@
     <color name="ic_launcher_background">#FF1DA1F2</color>
     <color name="text">#FFEDEDED</color>
     <color name="text_dim">#FF9A9CA3</color>
+    <!-- seasonal icon backgrounds -->
+    <color name="ic_bg_halloween">#FFFF7A1A</color>
+    <color name="ic_bg_valentine">#FFFF4F8B</color>
+    <color name="ic_bg_aprilfools">#FF1DA1F2</color>
+    <color name="ic_bg_easter">#FF9B7BFF</color>
 </resources>

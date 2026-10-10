@@ -26,6 +26,16 @@
             android:supportsPictureInPicture="true"
             android:resizeableActivity="true"
             android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboard|keyboardHidden|navigation|uiMode|density">
+        </activity>
+
+        <!-- launcher entries, one per icon (Icons.kt keeps exactly one enabled) -->
+        <activity-alias
+            android:name=".Launcher"
+            android:enabled="true"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher"
+            android:roundIcon="@mipmap/ic_launcher_round"
+            android:targetActivity=".MainActivity">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -33,12 +43,108 @@
             <meta-data
                 android:name="android.app.shortcuts"
                 android:resource="@xml/shortcuts" />
-        </activity>
+        </activity-alias>
+        <activity-alias
+            android:name=".LauncherHalloween"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_halloween"
+            android:roundIcon="@mipmap/ic_launcher_halloween"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
+        </activity-alias>
+        <activity-alias
+            android:name=".LauncherWinter"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_winter"
+            android:roundIcon="@mipmap/ic_launcher_winter"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
+        </activity-alias>
+        <activity-alias
+            android:name=".LauncherValentine"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_valentine"
+            android:roundIcon="@mipmap/ic_launcher_valentine"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
+        </activity-alias>
+        <activity-alias
+            android:name=".LauncherAprilfools"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_aprilfools"
+            android:roundIcon="@mipmap/ic_launcher_aprilfools"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
+        </activity-alias>
+        <activity-alias
+            android:name=".LauncherEaster"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_easter"
+            android:roundIcon="@mipmap/ic_launcher_easter"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
+        </activity-alias>
+        <activity-alias
+            android:name=".LauncherBirthday"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_birthday"
+            android:roundIcon="@mipmap/ic_launcher_birthday"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
+        </activity-alias>
 
         <activity
             android:name=".SettingsActivity"
             android:exported="false"
             android:label="@string/settings"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboard|keyboardHidden" />
+
+        <activity
+            android:name=".SetupActivity"
+            android:exported="false"
+            android:label="@string/setup_title"
             android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboard|keyboardHidden" />
     </application>
 </manifest>

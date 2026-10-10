@@ -34,4 +34,29 @@
     <string name="seamless_explain">The reload every 3 videos that fixes the sound happens without the cube, the last frame just stays on screen until the next video plays, like a tiny lag.</string>
     <string name="offline_enabled">Offline mode</string>
     <string name="offline_disabled">Offline mode is turned off in Settings</string>
+    <string name="setup_title">Smolish Setup</string>
+    <string name="setup_sub">A couple of things so your app icon can celebrate with you.</string>
+    <string name="setup_birthday">When\'s your birthday?</string>
+    <string name="setup_birthday_sub">No year needed. On that day the icon gets a party hat.</string>
+    <string name="setup_no_birthday">I\'d rather not say</string>
+    <string name="setup_region">Where do you celebrate?</string>
+    <string name="setup_region_sub">Decides when Easter and the New Year / Christmas icon show up.</string>
+    <string name="region_ru">Russia (Orthodox Easter, New Year)</string>
+    <string name="region_west">Western countries (Western Easter, Christmas)</string>
+    <string name="region_none">No religion (no Easter, still New Year / Christmas)</string>
+    <string name="setup_done">Done</string>
+    <string name="icon_section">App icon</string>
+    <string name="icon_explain">Smolish changes its icon for holidays by itself. Some launchers restart the app for a second when it switches.</string>
+    <string name="icon_label">Icon</string>
+    <string name="run_setup">Smolish Setup</string>
+    <string-array name="icon_modes">
+        <item>Automatic (holidays)</item>
+        <item>Classic</item>
+        <item>Halloween</item>
+        <item>New Year / Christmas</item>
+        <item>Valentine\'s</item>
+        <item>April Fools</item>
+        <item>Easter</item>
+        <item>Birthday</item>
+    </string-array>
 </resources>

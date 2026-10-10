@@ -12,7 +12,11 @@ import android.webkit.JavascriptInterface
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.content.Intent
+import android.widget.AdapterView
+import android.widget.ArrayAdapter
 import android.widget.Button
+import android.widget.Spinner
 import android.widget.ProgressBar
 import android.widget.SeekBar
 import android.widget.Switch
@@ -85,6 +89,16 @@ class SettingsActivity : ComponentActivity() {
             OfflineStore.clear(this)
             showSaved()
         }
+        val iconKeys = listOf(Icons.AUTO, "default", "halloween", "winter", "valentine", "aprilfools", "easter", "birthday")
+        findViewById<Spinner>(R.id.icon).apply {
+            adapter = ArrayAdapter.createFromResource(this@SettingsActivity, R.array.icon_modes, android.R.layout.simple_spinner_dropdown_item)
+            setSelection(iconKeys.indexOf(Icons.mode(this@SettingsActivity)).coerceAtLeast(0))
+            onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+                override fun onItemSelected(p: AdapterView<*>?, v: View?, pos: Int, id: Long) = Icons.setMode(this@SettingsActivity, iconKeys[pos])
+                override fun onNothingSelected(p: AdapterView<*>?) {}
+            }
+        }
+        findViewById<Button>(R.id.run_setup).setOnClickListener { startActivity(Intent(this, SetupActivity::class.java)) }
         findViewById<Switch>(R.id.seamless).apply {
             isChecked = isSeamless(this@SettingsActivity)
             setOnCheckedChangeListener { _, on -> getSharedPreferences("app", 0).edit().putBoolean("seamless", on).apply() }
@@ -161,6 +175,12 @@ class SettingsActivity : ComponentActivity() {
     private fun setStatus(text: String) {
         status.isVisible = true
         status.text = text
+    }
+
+    // the icon switches when you leave settings, not while you're picking
+    override fun onStop() {
+        super.onStop()
+        Icons.apply(this)
     }
 
     override fun onDestroy() {
