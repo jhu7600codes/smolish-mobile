@@ -59,6 +59,9 @@ import kotlin.concurrent.thread
 class MainActivity : ComponentActivity() {
 
     companion object {
+        /** True while the app is on screen; the background service doesn't notify then. */
+        @Volatile var inFront = false
+            private set
         private const val HOME = "https://smolish.com/"
         private const val HOST = "smolish.com"
         private const val MAX_SPLASH_MS = 12_000L
@@ -109,6 +112,7 @@ class MainActivity : ComponentActivity() {
     private val seamlessTimeout = Runnable { finishHide() }
     private var hideTopbarNext = false
     @Volatile private var resumed = false
+    private val pollJs by lazy { assets.open("notify_poll.js").bufferedReader().use { it.readText() } }
     private var translateState = ""
     private val translateJs by lazy { assets.open("translate.js").bufferedReader().use { it.readText() } }
     @Volatile private var soundRefreshQueued = false
@@ -188,6 +192,7 @@ class MainActivity : ComponentActivity() {
         onBackPressedDispatcher.addCallback(this, backHandler)
 
         Notify.createChannel(this)
+        NotifyService.start(this)
         val openUrl = intent?.getStringExtra(Notify.EXTRA_URL)
         if (intent?.action == ACTION_OFFLINE) {
             if (OfflineStore.isEnabled(this)) offlineByChoice = true else toast(R.string.offline_disabled)
@@ -332,6 +337,8 @@ class MainActivity : ComponentActivity() {
         val last = getSharedPreferences("app", 0).getInt("last_unread", -1)
         web.evaluateJavascript("window.__smolishLastUnread = $last;", null)
         web.evaluateJavascript(bridgeJs, null)
+        // the page checks for notifications itself only while the background service isn't doing it
+        if (!NotifyService.running) web.evaluateJavascript(pollJs, null)
         // only smolish itself, not the login pages of google & co
         if (Translator.isOn(this) && isOurHost(web.url?.let { Uri.parse(it).host })) web.evaluateJavascript(translateJs, null)
     }
@@ -540,7 +547,7 @@ class MainActivity : ComponentActivity() {
         /** The unread count went up: show it as a real notification if you're not in the app. */
         @JavascriptInterface
         fun onNotification(count: Int, who: String, what: String) {
-            if (resumed) return // you're looking at the site, its own bell shows it
+            if (resumed || NotifyService.running) return // you're looking at the site / the service does it
             Notify.show(this@MainActivity, count, who, what)
         }
 
@@ -818,12 +825,14 @@ class MainActivity : ComponentActivity() {
             if (splashHidden && !inOffline()) reloadWithLoader(seamless = false)
         }
         resumed = true
+        inFront = true
         web.onResume()
     }
 
     override fun onPause() {
         super.onPause()
         resumed = false
+        inFront = false
         CookieManager.getInstance().flush() // keep the login if the app gets killed
         if (!isInPictureInPictureMode) web.onPause()
     }

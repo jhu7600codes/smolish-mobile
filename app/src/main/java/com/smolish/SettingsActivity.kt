@@ -115,6 +115,10 @@ class SettingsActivity : ComponentActivity() {
                 langSpinner.isEnabled = on
             }
         }
+        findViewById<Switch>(R.id.bg_notifs).apply {
+            isChecked = NotifyService.isEnabled(this@SettingsActivity)
+            setOnCheckedChangeListener { _, on -> NotifyService.setEnabled(this@SettingsActivity, on) }
+        }
         findViewById<Switch>(R.id.seamless).apply {
             isChecked = isSeamless(this@SettingsActivity)
             setOnCheckedChangeListener { _, on -> getSharedPreferences("app", 0).edit().putBoolean("seamless", on).apply() }

@@ -70,6 +70,11 @@
     <string name="translate_on">Translate Smolish</string>
     <string name="translate_explain">Smolish is only in English, so the app translates it for you: buttons, captions, comments, everything. Uses Yandex Translate (it gets memes); if Yandex is down, Google Translate takes over. Long-press any text to see the original.</string>
     <string name="translate_lang">Language</string>
+    <string name="bg_channel">Background check (you can hide this)</string>
+    <string name="bg_title">Smolish is keeping an eye out</string>
+    <string name="bg_text">Checking for new likes, comments and follows</string>
+    <string name="bg_notifs">Notifications when the app is closed</string>
+    <string name="bg_notifs_explain">Keeps a quiet notification pinned so Android doesn\'t stop it, then checks for new activity every minute, even after a reboot. To hide the pinned one, long-press it and turn off \"Background check\".</string>
     <string name="dev_section">Developer</string>
     <string name="dev_explain">Only you see this, @jhu. Plays a holiday\'s launch: the system splash, then the intro. Tap to replay, back to leave.</string>
     <string name="test_splash">Test splash</string>
