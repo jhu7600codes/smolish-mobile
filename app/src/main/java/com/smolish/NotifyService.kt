@@ -57,7 +57,7 @@ class NotifyService : Service() {
         }
     }
 
-    private val handler = Handler(Looper.getMainLooper())
+    private val mainHandler = Handler(Looper.getMainLooper())
     private var web: WebView? = null
     private var ready = false
     private val pollJs by lazy { assets.open("notify_poll.js").bufferedReader().use { it.readText() } }
@@ -92,12 +92,12 @@ class NotifyService : Service() {
             stopSelf()
             return
         }
-        if (!MainActivity.inFront) handler.postDelayed(::load, 5_000)
+        if (!MainActivity.inFront) mainHandler.postDelayed(::load, 5_000)
     }
 
     private fun onAppVisible(visible: Boolean) {
-        handler.removeCallbacksAndMessages(null)
-        if (visible) unload() else handler.postDelayed(::load, 3_000) // let the app settle first
+        mainHandler.removeCallbacksAndMessages(null)
+        if (visible) unload() else mainHandler.postDelayed(::load, 3_000) // let the app settle first
     }
 
     private fun unload() {
@@ -110,7 +110,7 @@ class NotifyService : Service() {
 
     @SuppressLint("SetJavaScriptEnabled")
     private fun load() {
-        handler.removeCallbacksAndMessages(null)
+        mainHandler.removeCallbacksAndMessages(null)
         if (MainActivity.inFront) return unload()
         unload()
         web = WebView(applicationContext).apply {
@@ -125,8 +125,8 @@ class NotifyService : Service() {
                     if (view == web) {
                         web = null
                         ready = false
-                        handler.removeCallbacksAndMessages(null)
-                        handler.postDelayed(::load, 60_000)
+                        mainHandler.removeCallbacksAndMessages(null)
+                        mainHandler.postDelayed(::load, 60_000)
                     }
                     runCatching { view.destroy() }
                     return true
@@ -134,7 +134,7 @@ class NotifyService : Service() {
 
                 override fun onPageFinished(view: WebView, url: String?) {
                     // give the site's scripts a moment, and skip cloudflare's check page (no next.js there)
-                    handler.postDelayed({
+                    mainHandler.postDelayed({
                         val last = getSharedPreferences("app", 0).getInt("last_unread", -1)
                         view.evaluateJavascript(
                             "(function(){ if (!document.querySelector('script[src*=\"/_next/\"]')) return false;" +
@@ -145,8 +145,8 @@ class NotifyService : Service() {
             }
             loadUrl("https://smolish.com/notifications")
         }
-        handler.postDelayed(::poll, 10_000)
-        handler.postDelayed(::load, RELOAD_MS)
+        mainHandler.postDelayed(::poll, 10_000)
+        mainHandler.postDelayed(::load, RELOAD_MS)
     }
 
     private var notReadyPolls = 0
@@ -159,13 +159,13 @@ class NotifyService : Service() {
             notReadyPolls = 0
             return load()
         }
-        handler.postDelayed(::poll, POLL_MS)
+        mainHandler.postDelayed(::poll, POLL_MS)
     }
 
     override fun onDestroy() {
         running = false
         if (instance == this) instance = null
-        handler.removeCallbacksAndMessages(null)
+        mainHandler.removeCallbacksAndMessages(null)
         unload()
         super.onDestroy()
     }

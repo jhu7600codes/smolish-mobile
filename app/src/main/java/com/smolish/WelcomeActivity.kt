@@ -36,7 +36,7 @@ class WelcomeActivity : ComponentActivity() {
     private lateinit var smol: SmolView
     private lateinit var bubble: TextView
     private lateinit var content: LinearLayout
-    private val handler = Handler(Looper.getMainLooper())
+    private val mainHandler = Handler(Looper.getMainLooper())
     private var typing: Runnable? = null
     private var afterTyping: (() -> Unit)? = null
 
@@ -90,7 +90,7 @@ class WelcomeActivity : ComponentActivity() {
         bubble.setOnClickListener { skipTyping() }
 
         // let him land and start waving before he talks
-        handler.postDelayed({
+        mainHandler.postDelayed({
             bubble.animate().alpha(1f).setDuration(200).start()
             say(HELLO, SmolView.Mood.WAVE) { askLanguage() }
         }, 700)
@@ -98,7 +98,7 @@ class WelcomeActivity : ComponentActivity() {
 
     // --- the speech bubble types its text out; tap it to skip ahead
     private fun say(text: String, mood: SmolView.Mood = SmolView.Mood.TALK, then: () -> Unit = {}) {
-        typing?.let { handler.removeCallbacks(it) }
+        typing?.let { mainHandler.removeCallbacks(it) }
         content.removeAllViews()
         smol.mood = mood
         smol.talking = true
@@ -109,18 +109,18 @@ class WelcomeActivity : ComponentActivity() {
             override fun run() {
                 i++
                 bubble.text = text.substring(0, i)
-                if (i < text.length) handler.postDelayed(this, if (text[i - 1] in ".!?") 160 else 24)
+                if (i < text.length) mainHandler.postDelayed(this, if (text[i - 1] in ".!?") 160 else 24)
                 else finishTyping()
             }
         }
-        if (text.isEmpty()) finishTyping() else handler.post(typing!!)
+        if (text.isEmpty()) finishTyping() else mainHandler.post(typing!!)
     }
 
     private var fullText = ""
 
     private fun skipTyping() {
         val r = typing ?: return
-        handler.removeCallbacks(r)
+        mainHandler.removeCallbacks(r)
         bubble.text = fullText
         finishTyping()
     }
@@ -182,7 +182,7 @@ class WelcomeActivity : ComponentActivity() {
                 if (isFinishing) return@runOnUiThread
                 if (out == null) {
                     lang = "en"
-                    say(OFFLINE) { handler.postDelayed({ askBirthday() }, 900) }
+                    say(OFFLINE) { mainHandler.postDelayed({ askBirthday() }, 900) }
                 } else {
                     texts.forEachIndexed { i, s -> if (out[i].isNotBlank()) tr[s] = out[i] }
                     askBirthday()
@@ -220,10 +220,10 @@ class WelcomeActivity : ComponentActivity() {
                 val md = if (none.isChecked) null else MonthDay.of(month.value, day.value)
                 Icons.setBirthday(this, md)
                 when {
-                    md == null -> say(t(BIRTHDAY_SECRET)) { handler.postDelayed({ askRegion() }, 700) }
+                    md == null -> say(t(BIRTHDAY_SECRET)) { mainHandler.postDelayed({ askRegion() }, 700) }
                     md == MonthDay.now() -> {
                         smol.theme = "birthday"
-                        say(t(BIRTHDAY_TODAY), SmolView.Mood.HAPPY) { handler.postDelayed({ askRegion() }, 1200) }
+                        say(t(BIRTHDAY_TODAY), SmolView.Mood.HAPPY) { mainHandler.postDelayed({ askRegion() }, 1200) }
                     }
                     else -> askRegion()
                 }
@@ -283,7 +283,7 @@ class WelcomeActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
-        handler.removeCallbacksAndMessages(null)
+        mainHandler.removeCallbacksAndMessages(null)
         super.onDestroy()
     }
 }
